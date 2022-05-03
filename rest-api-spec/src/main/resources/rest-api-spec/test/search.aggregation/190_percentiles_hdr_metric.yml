@@ -187,7 +187,7 @@ setup:
   - match: { aggregations.percentiles_int.values.5\.0: 51.0 }
   - match: { aggregations.percentiles_int.values.25\.0: 51.0 }
   - match: { aggregations.percentiles_int.values.50\.0: 101.03125 }
-  - match: { aggregations.percentiles_int.values.75\.0: 101.03125 }
+  - match: { aggregations.percentiles_int.values.75\.0: 151.09375 }
   - match: { aggregations.percentiles_int.values.95\.0: 151.09375 }
   - match: { aggregations.percentiles_int.values.99\.0: 151.09375 }
 
@@ -195,7 +195,7 @@ setup:
   - match: { aggregations.percentiles_double.values.5\.0: 51.0 }
   - match: { aggregations.percentiles_double.values.25\.0: 51.0 }
   - match: { aggregations.percentiles_double.values.50\.0: 101.03125 }
-  - match: { aggregations.percentiles_double.values.75\.0: 101.03125 }
+  - match: { aggregations.percentiles_double.values.75\.0: 151.09375 }
   - match: { aggregations.percentiles_double.values.95\.0: 151.09375 }
   - match: { aggregations.percentiles_double.values.99\.0: 151.09375 }
 
