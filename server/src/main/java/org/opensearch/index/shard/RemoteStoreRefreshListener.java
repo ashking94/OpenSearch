@@ -169,7 +169,7 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                             // Start tracking total uploads started
                             statsTracker.incrementTotalUploadsStarted();
 
-                            if (random.nextInt(100) < 80) {
+                            if (random.nextInt(100) < 50) {
                                 throw new RuntimeException("Failing upload for test purpose");
                             }
 
