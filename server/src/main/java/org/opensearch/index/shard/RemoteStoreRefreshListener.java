@@ -21,14 +21,12 @@ import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
 import org.opensearch.common.concurrent.GatedCloseable;
-import org.opensearch.common.unit.TimeValue;
 import org.opensearch.index.RemoteSegmentUploadShardStatsTracker;
 import org.opensearch.index.RemoteUploadPressureService;
 import org.opensearch.index.engine.EngineException;
 import org.opensearch.index.engine.InternalEngine;
 import org.opensearch.index.seqno.SequenceNumbers;
 import org.opensearch.index.store.RemoteSegmentStoreDirectory;
-import org.opensearch.threadpool.ThreadPool;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -41,7 +39,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -76,7 +73,6 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
     private final AtomicLong refreshSeqNo = new AtomicLong();
     private final Map<String, Long> fileSizeMap = new HashMap<>();
     private final Random random = new Random();
-    private final Semaphore retrySemaphore = new Semaphore(1);
 
     public RemoteStoreRefreshListener(IndexShard indexShard) {
         this.indexShard = indexShard;
@@ -112,9 +108,6 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
     }
 
     private synchronized void afterRefresh(boolean didRefresh, boolean retry) {
-        if (retry) {
-            logger.info("Retrying syncing the segments");
-        }
         UploadStatus segmentsUploadStatus = null, metadataUploadStatus = null;
         RemoteSegmentUploadShardStatsTracker statsTracker = remoteUploadPressureService.getStatsTracker(indexShard.shardId());
         if (didRefresh) {
@@ -169,7 +162,7 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                             // Start tracking total uploads started
                             statsTracker.incrementTotalUploadsStarted();
 
-                            if (random.nextInt(100) < 50) {
+                            if (random.nextInt(100) < 95) {
                                 throw new RuntimeException("Failing upload for test purpose");
                             }
 
@@ -230,14 +223,6 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
             }
         } catch (Throwable t) {
             logger.error("Exception in RemoteStoreRefreshListener.afterRefresh()", t);
-        }
-        if (retry) {
-            retrySemaphore.release();
-        }
-        // Retry
-        if (metadataUploadStatus != UploadStatus.SUCCEEDED && metadataUploadStatus != null && retrySemaphore.tryAcquire()) {
-            indexShard.getThreadPool()
-                .schedule(() -> this.afterRefresh(false, true), TimeValue.timeValueSeconds(2), ThreadPool.Names.GENERIC);
         }
     }
 
