@@ -109,10 +109,10 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
      */
     @Override
     public void afterRefresh(boolean didRefresh) {
-        afterRefresh(didRefresh, true);
+        afterRefresh(didRefresh, true, 0);
     }
 
-    private void afterRefresh(boolean didRefresh, boolean fail) {
+    private void afterRefresh(boolean didRefresh, boolean fail, int runCount) {
         synchronized (this) {
             RemoteSegmentUploadShardStatsTracker statsTracker = remoteUploadPressureService.getStatsTracker(indexShard.shardId());
             if (didRefresh) {
@@ -171,10 +171,8 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                             // Start tracking total uploads started
                             statsTracker.incrementTotalUploadsStarted();
 
-                            if (fail) {
-                                if (count.get() % 100 >= 50) {
-                                    throw new RuntimeException("Failing upload for test purpose");
-                                }
+                            if (count.get() % 100 >= 50) {
+                                throw new RuntimeException("Failing upload for test purpose");
                             }
 
                             // Start the segments upload
@@ -227,9 +225,13 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                         }
 
                         // Retry
-                        if (metadataUploadStatus != UploadStatus.SUCCEEDED) {
+                        if (metadataUploadStatus != UploadStatus.SUCCEEDED && runCount < 1) {
                             indexShard.getThreadPool()
-                                .schedule(() -> this.afterRefresh(false, false), TimeValue.timeValueSeconds(2), ThreadPool.Names.GENERIC);
+                                .schedule(
+                                    () -> this.afterRefresh(false, false, runCount + 1),
+                                    TimeValue.timeValueSeconds(2),
+                                    ThreadPool.Names.GENERIC
+                                );
                         }
                     }
                 } catch (IOException e) {
