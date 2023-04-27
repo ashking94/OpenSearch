@@ -37,7 +37,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -72,7 +71,6 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
     private final AtomicLong refreshTime = new AtomicLong(System.nanoTime());
     private final AtomicLong refreshSeqNo = new AtomicLong();
     private final Map<String, Long> fileSizeMap = new HashMap<>();
-    private final Random random = new Random();
 
     public RemoteStoreRefreshListener(IndexShard indexShard) {
         this.indexShard = indexShard;
@@ -161,10 +159,6 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
 
                             // Start tracking total uploads started
                             statsTracker.incrementTotalUploadsStarted();
-
-                            if (random.nextInt(100) < 50) {
-                                throw new RuntimeException("Failing upload for test purpose");
-                            }
 
                             // Start the segments upload
                             segmentsUploadStatus = UploadStatus.STARTED;
