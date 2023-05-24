@@ -183,6 +183,7 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
             return;
         }
         beforeSegmentsSync(isRetry);
+        logger.info("beforeSegmentsSync done");
         long refreshTimeMs = segmentTracker.getLocalRefreshTimeMs(), refreshSeqNo = segmentTracker.getLocalRefreshSeqNo();
         long bytesBeforeUpload = segmentTracker.getUploadBytesSucceeded(), startTimeInNS = System.nanoTime();
         boolean shouldRetry = true;
@@ -198,11 +199,14 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                 // This is done to avoid delete post each refresh.
                 // Ideally, we want this to be done in async flow. (GitHub issue #4315)
                 if (isRefreshAfterCommit()) {
+                    logger.info("deleteStaleCommits starting");
                     deleteStaleCommits();
+                    logger.info("deleteStaleCommits done");
                 }
 
                 String segmentInfoSnapshotFilename = null;
                 try (GatedCloseable<SegmentInfos> segmentInfosGatedCloseable = indexShard.getSegmentInfosSnapshot()) {
+                    logger.info("segmentInfosGatedCloseable");
                     SegmentInfos segmentInfos = segmentInfosGatedCloseable.get();
                     // Capture replication checkpoint before uploading the segments as upload can take some time and checkpoint can
                     // move.
@@ -230,12 +234,17 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                         // Create a map of file name to size and update the refresh segment tracker
                         updateLocalSizeMapAndTracker(localSegmentsPostRefresh);
 
+                        logger.info("uploadNewSegments starting");
                         // Start the segments files upload
                         boolean newSegmentsUploadStatus = uploadNewSegments(localSegmentsPostRefresh);
+                        logger.info("uploadNewSegments done");
                         if (newSegmentsUploadStatus) {
+                            logger.info("uploadSegmentInfosSnapshot starting");
                             segmentInfoSnapshotFilename = uploadSegmentInfosSnapshot(latestSegmentInfos.get(), segmentInfos);
+                            logger.info("uploadSegmentInfosSnapshot done");
                             localSegmentsPostRefresh.add(segmentInfoSnapshotFilename);
 
+                            logger.info("uploadMetadata starting");
                             // Start metadata file upload
                             remoteDirectory.uploadMetadata(
                                 localSegmentsPostRefresh,
@@ -243,6 +252,7 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                                 indexShard.getOperationPrimaryTerm(),
                                 segmentInfos.getGeneration()
                             );
+                            logger.info("uploadMetadata done");
                             clearStaleFilesFromLocalSegmentChecksumMap(localSegmentsPostRefresh);
                             onSuccessfulSegmentsSync(refreshTimeMs, refreshSeqNo);
                             indexShard.getEngine().translogManager().setMinSeqNoToKeep(lastRefreshedCheckpoint + 1);
@@ -274,7 +284,9 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
             // Update the segment tracker with the final upload status as seen at the end
             updateFinalUploadStatusInSegmentTracker(shouldRetry == false, bytesBeforeUpload, startTimeInNS);
         }
+        logger.info("afterSegmentsSync starting");
         afterSegmentsSync(isRetry, shouldRetry);
+        logger.info("afterSegmentsSync done");
     }
 
     /**
@@ -366,16 +378,15 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
     }
 
     private boolean uploadNewSegments(Collection<String> localSegmentsPostRefresh) throws IOException {
-        AtomicBoolean uploadSuccess = new AtomicBoolean(true);
-        localSegmentsPostRefresh.forEach(file -> {
+        for (String file : localSegmentsPostRefresh) {
             try {
                 fileUploader.uploadFile(file);
             } catch (IOException e) {
-                uploadSuccess.set(false);
                 logger.warn(() -> new ParameterizedMessage("Exception while uploading file {} to the remote segment store", file), e);
+                return false;
             }
-        });
-        return uploadSuccess.get();
+        }
+        return true;
     }
 
     private String getChecksumOfLocalFile(String file) throws IOException {
@@ -445,12 +456,13 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
     private void updateFinalUploadStatusInSegmentTracker(boolean uploadStatus, long bytesBeforeUpload, long startTimeInNS) {
         if (uploadStatus) {
             long bytesUploaded = segmentTracker.getUploadBytesSucceeded() - bytesBeforeUpload;
-            long timeTakenInMS = (System.nanoTime() - startTimeInNS) / 1_000_000L;
-
             segmentTracker.incrementTotalUploadsSucceeded();
-            segmentTracker.addUploadBytes(bytesUploaded);
-            segmentTracker.addUploadBytesPerSec((bytesUploaded * 1_000L) / timeTakenInMS);
-            segmentTracker.addUploadTimeMs(timeTakenInMS);
+            if (bytesUploaded > 0) {
+                long timeTakenInMS = (System.nanoTime() - startTimeInNS) / 1_000_000L;
+                segmentTracker.addUploadBytes(bytesUploaded);
+                segmentTracker.addUploadBytesPerSec((bytesUploaded * 1_000L) / timeTakenInMS);
+                segmentTracker.addUploadTimeMs(timeTakenInMS);
+            }
         } else {
             segmentTracker.incrementTotalUploadsFailed();
         }
