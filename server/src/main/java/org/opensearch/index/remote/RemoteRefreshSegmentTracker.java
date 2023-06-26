@@ -98,6 +98,21 @@ public class RemoteRefreshSegmentTracker {
     private volatile long uploadBytesSucceeded;
 
     /**
+     * Cumulative sum of size in bytes of segment files for which download has started during remote refresh.
+     */
+    private volatile long downloadBytesStarted;
+
+    /**
+     * Cumulative sum of size in bytes of segment files for which download has failed during remote refresh.
+     */
+    private volatile long downloadBytesFailed;
+
+    /**
+     * Cumulative sum of size in bytes of segment files for which download has succeeded during remote refresh.
+     */
+    private volatile long downloadBytesSucceeded;
+
+    /**
      * Cumulative sum of count of remote refreshes that have started.
      */
     private volatile long totalUploadsStarted;
@@ -111,6 +126,21 @@ public class RemoteRefreshSegmentTracker {
      * Cumulative sum of count of remote refreshes that have succeeded.
      */
     private volatile long totalUploadsSucceeded;
+
+    /**
+     * Cumulative sum of count of segment sync from remote store that have started.
+     */
+    private volatile long totalDownloadsStarted;
+
+    /**
+     * Cumulative sum of count of segment sync from remote store that have failed.
+     */
+    private volatile long totalDownloadsFailed;
+
+    /**
+     * Cumulative sum of count of segment sync from remote store that have succeeded.
+     */
+    private volatile long totalDownloadsSucceeded;
 
     /**
      * Cumulative sum of rejection counts for this shard.
@@ -148,6 +178,8 @@ public class RemoteRefreshSegmentTracker {
      */
     private final AtomicReference<MovingAverage> uploadBytesMovingAverageReference;
 
+    private final AtomicReference<MovingAverage> downloadBytesMovingAverageReference;
+
     /**
      * This lock object is used for making sure we do not miss any data
      */
@@ -159,6 +191,8 @@ public class RemoteRefreshSegmentTracker {
      */
     private final AtomicReference<MovingAverage> uploadBytesPerSecMovingAverageReference;
 
+    private final AtomicReference<MovingAverage> downloadBytesPerSecMovingAverageReference;
+
     private final Object uploadBytesPerSecMutex = new Object();
 
     /**
@@ -166,6 +200,8 @@ public class RemoteRefreshSegmentTracker {
      * Wrapped with {@code AtomicReference} for dynamic changes in window size.
      */
     private final AtomicReference<MovingAverage> uploadTimeMsMovingAverageReference;
+
+    private final AtomicReference<MovingAverage> downloadTimeMsMovingAverageReference;
 
     private final Object uploadTimeMsMutex = new Object();
 
@@ -186,6 +222,10 @@ public class RemoteRefreshSegmentTracker {
         uploadBytesMovingAverageReference = new AtomicReference<>(new MovingAverage(uploadBytesMovingAverageWindowSize));
         uploadBytesPerSecMovingAverageReference = new AtomicReference<>(new MovingAverage(uploadBytesPerSecMovingAverageWindowSize));
         uploadTimeMsMovingAverageReference = new AtomicReference<>(new MovingAverage(uploadTimeMsMovingAverageWindowSize));
+
+        downloadBytesMovingAverageReference = new AtomicReference<>(new MovingAverage(20));
+        downloadBytesPerSecMovingAverageReference = new AtomicReference<>(new MovingAverage(20));
+        downloadTimeMsMovingAverageReference = new AtomicReference<>(new MovingAverage(20));
 
         latestLocalFileNameLengthMap = new HashMap<>();
     }
@@ -308,6 +348,10 @@ public class RemoteRefreshSegmentTracker {
 
     public void addUploadBytesSucceeded(long size) {
         uploadBytesSucceeded += size;
+    }
+
+    public long getDownloadBytesSucceeded() {
+        return downloadBytesSucceeded;
     }
 
     public long getInflightUploadBytes() {

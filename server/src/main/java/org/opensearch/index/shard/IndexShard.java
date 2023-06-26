@@ -146,6 +146,7 @@ import org.opensearch.index.merge.MergeStats;
 import org.opensearch.index.recovery.RecoveryStats;
 import org.opensearch.index.refresh.RefreshStats;
 import org.opensearch.index.remote.RemoteRefreshSegmentPressureService;
+import org.opensearch.index.remote.RemoteRefreshSegmentTracker;
 import org.opensearch.index.search.stats.SearchStats;
 import org.opensearch.index.search.stats.ShardSearchStats;
 import org.opensearch.index.seqno.ReplicationTracker;
@@ -4537,15 +4538,18 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
     public void syncSegmentsFromRemoteSegmentStore(boolean overrideLocal, boolean refreshLevelSegmentSync, boolean shouldCommit)
         throws IOException {
         assert indexSettings.isRemoteStoreEnabled();
+        RemoteRefreshSegmentTracker segmentTracker = remoteRefreshSegmentPressureService.getRemoteRefreshSegmentTracker(shardId);
+        long bytesBeforeDownload = segmentTracker.getDownloadBytesSucceeded(), startTimeInNS = System.nanoTime();
         logger.info("Downloading segments from remote segment store");
         RemoteSegmentStoreDirectory remoteDirectory = getRemoteDirectory();
         // We need to call RemoteSegmentStoreDirectory.init() in order to get latest metadata of the files that
         // are uploaded to the remote segment store.
         RemoteSegmentMetadata remoteSegmentMetadata = remoteDirectory.init();
-        Map<String, RemoteSegmentStoreDirectory.UploadedSegmentMetadata> uploadedSegments = ((RemoteSegmentStoreDirectory) remoteDirectory)
+        Map<String, RemoteSegmentStoreDirectory.UploadedSegmentMetadata> uploadedSegments = remoteDirectory
             .getSegmentsUploadedToRemoteStore();
         store.incRef();
         remoteStore.incRef();
+        List<String> toDownloadSegments = new ArrayList<>();
         List<String> downloadedSegments = new ArrayList<>();
         List<String> skippedSegments = new ArrayList<>();
         try {
@@ -4570,10 +4574,24 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
                     if (localSegmentFiles.contains(file)) {
                         storeDirectory.deleteFile(file);
                     }
-                    storeDirectory.copyFrom(remoteDirectory, file, file, IOContext.DEFAULT);
-                    downloadedSegments.add(file);
+                    toDownloadSegments.add(file);
                 } else {
                     skippedSegments.add(file);
+                }
+            }
+
+            // Increment the downloads bytes started
+            for (String segmentFileToDownload : toDownloadSegments) {
+
+            }
+
+            // Actual file downloads
+            for (String segmentFileToDownload : toDownloadSegments) {
+                try {
+                    storeDirectory.copyFrom(remoteDirectory, segmentFileToDownload, segmentFileToDownload, IOContext.DEFAULT);
+                    downloadedSegments.add(segmentFileToDownload);
+                } catch (Exception exception) {
+                    throw exception;
                 }
             }
 
