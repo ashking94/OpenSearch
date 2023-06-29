@@ -438,10 +438,12 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
             long bytesUploaded = segmentTracker.getUploadBytesSucceeded() - bytesBeforeUpload;
             long timeTakenInMS = (System.nanoTime() - startTimeInNS) / 1_000_000L;
 
+            long uploadBytesPerSec = (bytesUploaded * 1_000L) / timeTakenInMS;
             segmentTracker.incrementTotalUploadsSucceeded();
             segmentTracker.addUploadBytes(bytesUploaded);
-            segmentTracker.addUploadBytesPerSec((bytesUploaded * 1_000L) / timeTakenInMS);
+            segmentTracker.addUploadBytesPerSec(uploadBytesPerSec);
             segmentTracker.addUploadTimeMs(timeTakenInMS);
+            logger.info("uploadBytes={} uploadBytesPerSec={} uploadTime={}", bytesUploaded, uploadBytesPerSec, timeTakenInMS);
         } else {
             segmentTracker.incrementTotalUploadsFailed();
         }
