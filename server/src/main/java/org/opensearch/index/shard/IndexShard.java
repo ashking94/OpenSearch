@@ -4539,6 +4539,8 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
         throws IOException {
         assert indexSettings.isRemoteStoreEnabled();
         logger.info("Downloading segments from remote segment store");
+        long startTime = System.currentTimeMillis();
+        boolean completion = false;
         RemoteSegmentStoreDirectory remoteDirectory = getRemoteDirectory();
         // We need to call RemoteSegmentStoreDirectory.init() in order to get latest metadata of the files that
         // are uploaded to the remote segment store.
@@ -4619,11 +4621,13 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
                     }
                 }
             }
+            completion = true;
         } catch (IOException e) {
             throw new IndexShardRecoveryException(shardId, "Exception while copying segment files from remote segment store", e);
         } finally {
             logger.info("Downloaded segments: {}", downloadedSegments);
             logger.info("Skipped download for segments: {}", skippedSegments);
+            logger.info("downloadSegmentsTimeMs={} completionStatus={}", (System.currentTimeMillis() - startTime), completion);
             store.decRef();
             remoteStore.decRef();
         }
