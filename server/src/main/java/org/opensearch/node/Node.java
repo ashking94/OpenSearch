@@ -44,6 +44,7 @@ import org.opensearch.common.util.FeatureFlags;
 import org.opensearch.cluster.routing.allocation.AwarenessReplicaBalance;
 import org.opensearch.index.IndexModule;
 import org.opensearch.index.IndexingPressureService;
+import org.opensearch.index.remote.RemoteRefreshSegmentPressureService;
 import org.opensearch.index.store.remote.filecache.FileCache;
 import org.opensearch.index.store.remote.filecache.FileCacheCleaner;
 import org.opensearch.index.store.remote.filecache.FileCacheFactory;
@@ -258,6 +259,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
+import static org.opensearch.common.util.FeatureFlags.REMOTE_STORE;
 import static org.opensearch.common.util.FeatureFlags.SEARCH_PIPELINE;
 import static org.opensearch.common.util.FeatureFlags.TELEMETRY;
 import static org.opensearch.env.NodeEnvironment.collectFileCacheDataPath;
@@ -1256,6 +1258,12 @@ public class Node implements Closeable {
         nodeService.getMonitorService().start();
         nodeService.getSearchBackpressureService().start();
         nodeService.getTaskCancellationMonitoringService().start();
+
+        if (FeatureFlags.isEnabled(REMOTE_STORE)) {
+            IndicesService indicesService = injector.getInstance(IndicesService.class);
+            RemoteRefreshSegmentPressureService pressureService = injector.getInstance(RemoteRefreshSegmentPressureService.class);
+            indicesService.setPressureService(pressureService);
+        }
 
         final ClusterService clusterService = injector.getInstance(ClusterService.class);
 

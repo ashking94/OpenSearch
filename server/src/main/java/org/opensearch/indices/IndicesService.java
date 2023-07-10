@@ -60,6 +60,7 @@ import org.opensearch.common.CheckedConsumer;
 import org.opensearch.common.CheckedFunction;
 import org.opensearch.common.CheckedSupplier;
 import org.opensearch.common.Nullable;
+import org.opensearch.common.SetOnce;
 import org.opensearch.common.breaker.CircuitBreaker;
 import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.component.AbstractLifecycleComponent;
@@ -330,6 +331,9 @@ public class IndicesService extends AbstractLifecycleComponent
     private final BiFunction<IndexSettings, ShardRouting, TranslogFactory> translogFactorySupplier;
 
     private final FileCacheCleaner fileCacheCleaner;
+
+    // You can use this variable anywhere now.
+    private SetOnce<RemoteRefreshSegmentPressureService> pressureServiceSetOnce;
 
     @Override
     protected void doStart() {
@@ -1868,5 +1872,9 @@ public class IndicesService extends AbstractLifecycleComponent
     public boolean allPendingDanglingIndicesWritten() {
         return nodeWriteDanglingIndicesInfo == false
             || (danglingIndicesToWrite.isEmpty() && danglingIndicesThreadPoolExecutor.getActiveCount() == 0);
+    }
+
+    public void setPressureService(RemoteRefreshSegmentPressureService pressureService) {
+        pressureServiceSetOnce.set(pressureService);
     }
 }
