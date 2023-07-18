@@ -51,6 +51,7 @@ public class RemoteStoreRefreshListenerTests extends IndexShardTestCase {
     private IndexShard indexShard;
     private ClusterService clusterService;
     private RemoteStoreRefreshListener remoteStoreRefreshListener;
+    private RemoteSegmentTrackerListener remoteSegmentTrackerListener;
     private RemoteRefreshSegmentPressureService remoteRefreshSegmentPressureService;
 
     public void setup(boolean primary, int numberOfDocs) throws IOException {
@@ -77,11 +78,9 @@ public class RemoteStoreRefreshListenerTests extends IndexShardTestCase {
         );
         remoteRefreshSegmentPressureService = new RemoteRefreshSegmentPressureService(clusterService, Settings.EMPTY);
         remoteRefreshSegmentPressureService.afterIndexShardCreated(indexShard);
-        remoteStoreRefreshListener = new RemoteStoreRefreshListener(
-            indexShard,
-            SegmentReplicationCheckpointPublisher.EMPTY,
-            remoteRefreshSegmentPressureService.getRemoteRefreshSegmentTracker(indexShard.shardId())
-        );
+        RemoteRefreshSegmentTracker tracker = remoteRefreshSegmentPressureService.getRemoteRefreshSegmentTracker(indexShard.shardId());
+        remoteSegmentTrackerListener = new RemoteSegmentTrackerListener(indexShard, tracker);
+        remoteStoreRefreshListener = new RemoteStoreRefreshListener(indexShard, SegmentReplicationCheckpointPublisher.EMPTY, tracker);
     }
 
     private void indexDocs(int startDocId, int numberOfDocs) throws IOException {
@@ -181,6 +180,7 @@ public class RemoteStoreRefreshListenerTests extends IndexShardTestCase {
 
     public void testReplica() throws IOException {
         setup(false, 3);
+        remoteSegmentTrackerListener.afterRefresh(true);
         remoteStoreRefreshListener.afterRefresh(true);
 
         try (Store remoteStore = indexShard.remoteStore()) {
@@ -193,6 +193,7 @@ public class RemoteStoreRefreshListenerTests extends IndexShardTestCase {
 
     public void testReplicaPromotion() throws IOException, InterruptedException {
         setup(false, 3);
+        remoteSegmentTrackerListener.afterRefresh(true);
         remoteStoreRefreshListener.afterRefresh(true);
 
         RemoteSegmentStoreDirectory remoteSegmentStoreDirectory =
@@ -228,6 +229,7 @@ public class RemoteStoreRefreshListenerTests extends IndexShardTestCase {
 
         indexDocs(4, 4);
         indexShard.refresh("test");
+        remoteSegmentTrackerListener.afterRefresh(true);
         remoteStoreRefreshListener.afterRefresh(true);
 
         verifyUploadedSegments(remoteSegmentStoreDirectory);
@@ -470,11 +472,10 @@ public class RemoteStoreRefreshListenerTests extends IndexShardTestCase {
         when(shard.indexSettings()).thenReturn(indexShard.indexSettings());
         when(shard.shardId()).thenReturn(indexShard.shardId());
         remoteRefreshSegmentPressureService.afterIndexShardCreated(shard);
-        RemoteStoreRefreshListener refreshListener = new RemoteStoreRefreshListener(
-            shard,
-            emptyCheckpointPublisher,
-            remoteRefreshSegmentPressureService.getRemoteRefreshSegmentTracker(indexShard.shardId())
-        );
+        RemoteRefreshSegmentTracker tracker = remoteRefreshSegmentPressureService.getRemoteRefreshSegmentTracker(indexShard.shardId());
+        RemoteSegmentTrackerListener trackerListener = new RemoteSegmentTrackerListener(indexShard, tracker);
+        RemoteStoreRefreshListener refreshListener = new RemoteStoreRefreshListener(shard, emptyCheckpointPublisher, tracker);
+        trackerListener.afterRefresh(true);
         refreshListener.afterRefresh(true);
         return Tuple.tuple(refreshListener, remoteRefreshSegmentPressureService);
     }

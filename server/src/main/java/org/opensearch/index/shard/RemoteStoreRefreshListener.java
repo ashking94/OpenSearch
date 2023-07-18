@@ -25,13 +25,11 @@ import org.opensearch.common.concurrent.GatedCloseable;
 import org.opensearch.common.logging.Loggers;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.UploadListener;
-import org.opensearch.common.util.concurrent.ConcurrentCollections;
 import org.opensearch.index.engine.EngineException;
 import org.opensearch.index.engine.InternalEngine;
 import org.opensearch.index.remote.RemoteSegmentTransferTracker;
 import org.opensearch.index.seqno.SequenceNumbers;
 import org.opensearch.index.store.RemoteSegmentStoreDirectory;
-import org.opensearch.index.store.remote.metadata.RemoteSegmentMetadata;
 import org.opensearch.index.translog.Translog;
 import org.opensearch.indices.replication.checkpoint.ReplicationCheckpoint;
 import org.opensearch.indices.replication.checkpoint.SegmentReplicationCheckpointPublisher;
@@ -40,7 +38,6 @@ import org.opensearch.threadpool.ThreadPool;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
@@ -69,8 +66,6 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
      */
     private static final int REMOTE_REFRESH_RETRY_MAX_INTERVAL_MILLIS = 10_000;
 
-    private static final int INVALID_PRIMARY_TERM = -1;
-
     /**
      * Exponential back off policy with max retry interval.
      */
@@ -79,8 +74,7 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
         REMOTE_REFRESH_RETRY_MAX_INTERVAL_MILLIS
     );
 
-    // Visible for testing
-    static final Set<String> EXCLUDE_FILES = Set.of("write.lock");
+    public static final Set<String> EXCLUDE_FILES = Set.of("write.lock");
     // Visible for testing
     public static final int LAST_N_METADATA_FILES_TO_KEEP = 10;
 
@@ -91,14 +85,7 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
     private final Map<String, String> localSegmentChecksumMap;
     private long primaryTerm;
     private volatile Iterator<TimeValue> backoffDelayIterator;
-
-    /**
-     * Keeps track of segment files and their size in bytes which are part of the most recent refresh.
-     */
-    private final Map<String, Long> latestFileNameSizeOnLocalMap = ConcurrentCollections.newConcurrentMap();
-
     private final SegmentReplicationCheckpointPublisher checkpointPublisher;
-
     private final UploadListener statsListener;
 
     public RemoteStoreRefreshListener(
@@ -113,17 +100,7 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
         this.remoteDirectory = (RemoteSegmentStoreDirectory) ((FilterDirectory) ((FilterDirectory) indexShard.remoteStore().directory())
             .getDelegate()).getDelegate();
         localSegmentChecksumMap = new HashMap<>();
-        RemoteSegmentMetadata remoteSegmentMetadata = null;
-        if (indexShard.routingEntry().primary()) {
-            try {
-                remoteSegmentMetadata = this.remoteDirectory.init();
-            } catch (IOException e) {
-                logger.error("Exception while initialising RemoteSegmentStoreDirectory", e);
-            }
-        }
-        // initializing primary term with the primary term of latest metadata in remote store.
-        // if no metadata is present, this value will be initilized with -1.
-        this.primaryTerm = remoteSegmentMetadata != null ? remoteSegmentMetadata.getPrimaryTerm() : INVALID_PRIMARY_TERM;
+        this.primaryTerm = remoteDirectory.getPrimaryTermAtInit();
         this.segmentTracker = segmentTracker;
         resetBackOffDelayIterator();
         this.checkpointPublisher = checkpointPublisher;
@@ -131,20 +108,20 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
             @Override
             public void beforeUpload(String file) {
                 // Start tracking the upload bytes started
-                segmentTracker.addUploadBytesStarted(latestFileNameSizeOnLocalMap.get(file));
+                segmentTracker.addUploadBytesStarted(segmentTracker.getLatestLocalFileNameLengthMap().get(file));
             }
 
             @Override
             public void onSuccess(String file) {
                 // Track upload success
-                segmentTracker.addUploadBytesSucceeded(latestFileNameSizeOnLocalMap.get(file));
+                segmentTracker.addUploadBytesSucceeded(segmentTracker.getLatestLocalFileNameLengthMap().get(file));
                 segmentTracker.addToLatestUploadedFiles(file);
             }
 
             @Override
             public void onFailure(String file) {
                 // Track upload failure
-                segmentTracker.addUploadBytesFailed(latestFileNameSizeOnLocalMap.get(file));
+                segmentTracker.addUploadBytesFailed(segmentTracker.getLatestLocalFileNameLengthMap().get(file));
             }
         };
     }
@@ -160,11 +137,10 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
      * @return true if the method runs successfully.
      */
     @Override
-    protected boolean performAfterRefresh(boolean didRefresh, boolean isRetry) {
-        if (didRefresh && isRetry == false) {
-            updateLocalRefreshTimeAndSeqNo();
-        }
+    protected synchronized boolean performAfterRefresh(boolean didRefresh) {
         boolean successful;
+        // The third condition exists for uploading the zero state segments where the refresh has not changed the reader reference, but it
+        // is important to upload the zero state segments so that the restore does not break.
         if (this.primaryTerm != indexShard.getOperationPrimaryTerm()
             || didRefresh
             || remoteDirectory.getSegmentsUploadedToRemoteStore().isEmpty()) {
@@ -175,7 +151,7 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
         return successful;
     }
 
-    private synchronized boolean syncSegments() {
+    private boolean syncSegments() {
         if (indexShard.getReplicationTracker().isPrimaryMode() == false || indexShard.state() == IndexShardState.CLOSED) {
             logger.info(
                 "Skipped syncing segments with primaryMode={} indexShardState={}",
@@ -293,7 +269,7 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
         ReplicationCheckpoint checkpoint
     ) {
         // Update latest uploaded segment files name in segment tracker
-        segmentTracker.setLatestUploadedFiles(latestFileNameSizeOnLocalMap.keySet());
+        segmentTracker.setLatestUploadedFiles(segmentTracker.getLatestLocalFileNameLengthMap().keySet());
         // Update the remote refresh time and refresh seq no
         updateRemoteRefreshTimeAndSeqNo(refreshTimeMs, refreshClockTimeMs, refreshSeqNo);
         // Reset the backoffDelayIterator for the future failures
@@ -407,15 +383,6 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
     }
 
     /**
-     * Updates the last refresh time and refresh seq no which is seen by local store.
-     */
-    private void updateLocalRefreshTimeAndSeqNo() {
-        segmentTracker.updateLocalRefreshClockTimeMs(System.currentTimeMillis());
-        segmentTracker.updateLocalRefreshTimeMs(System.nanoTime() / 1_000_000L);
-        segmentTracker.updateLocalRefreshSeqNo(segmentTracker.getLocalRefreshSeqNo() + 1);
-    }
-
-    /**
      * Updates the last refresh time and refresh seq no which is seen by remote store.
      */
     private void updateRemoteRefreshTimeAndSeqNo(long refreshTimeMs, long refreshClockTimeMs, long refreshSeqNo) {
@@ -425,33 +392,12 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
     }
 
     /**
-     * Updates map of file name to size of the input segment files. Tries to reuse existing information by caching the size
-     * data, otherwise uses {@code storeDirectory.fileLength(file)} to get the size. This method also removes from the map
-     * such files that are not present in the list of segment files given in the input.
+     * Updates map of file name to size of the input segment files in the segment tracker. Uses {@code storeDirectory.fileLength(file)} to get the size.
      *
-     * @param segmentFiles list of segment files for which size needs to be known
+     * @param segmentFiles list of segment files that are part of the most recent local refresh.
      */
     private void updateLocalSizeMapAndTracker(Collection<String> segmentFiles) {
-
-        // Update the map
-        segmentFiles.stream()
-            .filter(file -> !EXCLUDE_FILES.contains(file))
-            .filter(file -> !latestFileNameSizeOnLocalMap.containsKey(file) || latestFileNameSizeOnLocalMap.get(file) == 0)
-            .forEach(file -> {
-                long fileSize = 0;
-                try {
-                    fileSize = storeDirectory.fileLength(file);
-                } catch (IOException e) {
-                    logger.warn(new ParameterizedMessage("Exception while reading the fileLength of file={}", file), e);
-                }
-                latestFileNameSizeOnLocalMap.put(file, fileSize);
-            });
-
-        Set<String> fileSet = new HashSet<>(segmentFiles);
-        // Remove keys from the fileSizeMap that do not exist in the latest segment files
-        latestFileNameSizeOnLocalMap.entrySet().removeIf(entry -> fileSet.contains(entry.getKey()) == false);
-        // Update the tracker
-        segmentTracker.setLatestLocalFileNameLengthMap(latestFileNameSizeOnLocalMap);
+        segmentTracker.updateLatestLocalFileNameLengthMap(segmentFiles, storeDirectory::fileLength);
     }
 
     private void updateFinalStatusInSegmentTracker(boolean uploadStatus, long bytesBeforeUpload, long startTimeInNS) {

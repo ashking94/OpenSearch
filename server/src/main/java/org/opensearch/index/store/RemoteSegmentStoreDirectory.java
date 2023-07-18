@@ -73,6 +73,8 @@ import java.util.zip.CRC32;
  * @opensearch.internal
  */
 public final class RemoteSegmentStoreDirectory extends FilterDirectory implements RemoteStoreCommitLevelLockManager {
+
+    private static final int INVALID_PRIMARY_TERM = -1;
     /**
      * Each segment file is uploaded with unique suffix.
      * For example, _0.cfe in local filesystem will be uploaded to remote segment store as _0.cfe__gX7bNIIBrs0AUNsR2yEG
@@ -103,6 +105,8 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory implement
      * It is important to initialize this map on creation of RemoteSegmentStoreDirectory and update it on each upload and delete.
      */
     private Map<String, UploadedSegmentMetadata> segmentsUploadedToRemoteStore;
+
+    private Long primaryTermAtInit;
 
     private static final VersionedCodecStreamWrapper<RemoteSegmentMetadata> metadataStreamWrapper = new VersionedCodecStreamWrapper<>(
         new RemoteSegmentMetadataHandler(),
@@ -144,6 +148,7 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory implement
     public RemoteSegmentMetadata init() throws IOException {
         RemoteSegmentMetadata remoteSegmentMetadata = readLatestMetadataFile();
         if (remoteSegmentMetadata != null) {
+            this.primaryTermAtInit = remoteSegmentMetadata.getPrimaryTerm();
             this.segmentsUploadedToRemoteStore = new ConcurrentHashMap<>(remoteSegmentMetadata.getMetadata());
         } else {
             this.segmentsUploadedToRemoteStore = new ConcurrentHashMap<>();
@@ -887,6 +892,12 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory implement
         }
 
         return true;
+    }
+
+    public long getPrimaryTermAtInit() {
+        // initializing primary term with the primary term of latest metadata in remote store.
+        // if no metadata is present, this value will be initialized with -1.
+        return primaryTermAtInit == null ? INVALID_PRIMARY_TERM : primaryTermAtInit;
     }
 
     public void close() throws IOException {
