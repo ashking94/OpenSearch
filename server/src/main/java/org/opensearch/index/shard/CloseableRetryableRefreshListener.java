@@ -27,10 +27,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public abstract class CloseableRetryableRefreshListener implements ReferenceManager.RefreshListener, Closeable {
 
-    /**
-     * Total permits = 1 ensures that there is only single instance of performAfterRefresh that is running at a time.
-     * In case there are use cases where concurrency is required, the total permit variable can be put inside the ctor.
-     */
     private static final int TOTAL_PERMITS = Integer.MAX_VALUE;
 
     private final AtomicBoolean closed = new AtomicBoolean(false);

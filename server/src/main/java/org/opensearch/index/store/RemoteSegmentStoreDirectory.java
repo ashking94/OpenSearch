@@ -297,7 +297,7 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory implement
      * Contains utility methods that provide various parts of metadata filename along with comparator
      * Each metadata filename is of format: PREFIX__PrimaryTerm__Generation__UUID
      */
-    static class MetadataFilenameUtils {
+    public static class MetadataFilenameUtils {
         public static final String SEPARATOR = "__";
         public static final String METADATA_PREFIX = "metadata";
 
