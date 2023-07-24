@@ -141,4 +141,9 @@ public abstract class CloseableRetryableRefreshListener implements ReferenceMana
     }
 
     protected abstract Logger getLogger();
+
+    // Visible for testing
+    boolean getRetryScheduledStatus() {
+        return retryScheduled.get();
+    }
 }

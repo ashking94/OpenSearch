@@ -19,6 +19,12 @@ import org.opensearch.threadpool.ThreadPool;
 
 import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class CloseableRetryableRefreshListenerTests extends OpenSearchTestCase {
 
@@ -296,6 +302,150 @@ public class CloseableRetryableRefreshListenerTests extends OpenSearchTestCase {
         });
         thread.start();
         assertBusy(() -> assertEquals(0, countDownLatch.getCount()));
+        testRefreshListener.close();
+    }
+
+    public void testScheduleRetryAfterClose() throws Exception {
+        // This tests that once the listener has been closed, even the retries would not be scheduled.
+        final AtomicLong runCount = new AtomicLong();
+        CloseableRetryableRefreshListener testRefreshListener = new CloseableRetryableRefreshListener(threadPool) {
+            @Override
+            protected boolean performAfterRefresh(boolean didRefresh) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    throw new AssertionError(e);
+                }
+                runCount.incrementAndGet();
+                return false;
+            }
+
+            @Override
+            public void beforeRefresh() {}
+
+            @Override
+            protected Logger getLogger() {
+                return logger;
+            }
+
+            @Override
+            protected String getRetryThreadPoolName() {
+                return ThreadPool.Names.REMOTE_REFRESH_RETRY;
+            }
+
+            @Override
+            protected TimeValue getNextRetryInterval() {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    throw new AssertionError(e);
+                }
+                return TimeValue.timeValueMillis(100);
+            }
+        };
+        Thread thread1 = new Thread(() -> {
+            try {
+                testRefreshListener.afterRefresh(true);
+            } catch (IOException e) {
+                throw new AssertionError(e);
+            }
+        });
+        Thread thread2 = new Thread(() -> {
+            try {
+                Thread.sleep(500);
+                testRefreshListener.close();
+            } catch (IOException | InterruptedException e) {
+                throw new AssertionError(e);
+            }
+        });
+        thread1.start();
+        thread2.start();
+        thread1.join();
+        thread2.join();
+        assertBusy(() -> assertEquals(1, runCount.get()));
+    }
+
+    public void testConcurrentScheduleRetry() throws Exception {
+        // This tests that there can be only 1 retry that can be scheduled at a time.
+        final AtomicLong runCount = new AtomicLong();
+        final AtomicInteger retryCount = new AtomicInteger(0);
+        CloseableRetryableRefreshListener testRefreshListener = new CloseableRetryableRefreshListener(threadPool) {
+            @Override
+            protected boolean performAfterRefresh(boolean didRefresh) {
+                retryCount.incrementAndGet();
+                runCount.incrementAndGet();
+                return retryCount.get() >= 2;
+            }
+
+            @Override
+            public void beforeRefresh() {}
+
+            @Override
+            protected Logger getLogger() {
+                return logger;
+            }
+
+            @Override
+            protected String getRetryThreadPoolName() {
+                return ThreadPool.Names.REMOTE_REFRESH_RETRY;
+            }
+
+            @Override
+            protected TimeValue getNextRetryInterval() {
+                return TimeValue.timeValueMillis(100);
+            }
+        };
+        Runnable afterRefreshRunnable = () -> {
+            try {
+                testRefreshListener.afterRefresh(true);
+            } catch (IOException e) {
+                throw new AssertionError(e);
+            }
+        };
+        Thread thread1 = new Thread(afterRefreshRunnable);
+        Thread thread2 = new Thread(afterRefreshRunnable);
+        thread1.start();
+        thread2.start();
+        thread1.join();
+        thread2.join();
+        assertBusy(() -> assertEquals(3, runCount.get()));
+        testRefreshListener.close();
+    }
+
+    public void testExceptionDuringThreadPoolSchedule() throws Exception {
+        // This tests that if there are exceptions while scheduling the task in the threadpool, the retrySchedule boolean
+        // is reset properly to allow future scheduling to happen.
+        AtomicInteger runCount = new AtomicInteger();
+        ThreadPool mockThreadPool = mock(ThreadPool.class);
+        when(mockThreadPool.schedule(any(), any(), any())).thenThrow(new RuntimeException());
+        CloseableRetryableRefreshListener testRefreshListener = new CloseableRetryableRefreshListener(mockThreadPool) {
+            @Override
+            protected boolean performAfterRefresh(boolean didRefresh) {
+                runCount.incrementAndGet();
+                return false;
+            }
+
+            @Override
+            public void beforeRefresh() {}
+
+            @Override
+            protected Logger getLogger() {
+                return logger;
+            }
+
+            @Override
+            protected String getRetryThreadPoolName() {
+                return ThreadPool.Names.REMOTE_REFRESH_RETRY;
+            }
+
+            @Override
+            protected TimeValue getNextRetryInterval() {
+                return TimeValue.timeValueMillis(100);
+            }
+        };
+        assertThrows(RuntimeException.class, () -> testRefreshListener.afterRefresh(true));
+        assertBusy(() -> assertFalse(testRefreshListener.getRetryScheduledStatus()));
+        assertEquals(1, runCount.get());
         testRefreshListener.close();
     }
 

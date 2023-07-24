@@ -13,6 +13,7 @@ import org.apache.lucene.index.SegmentInfos;
 import org.apache.lucene.store.ByteBuffersDataOutput;
 import org.apache.lucene.store.ByteBuffersIndexOutput;
 import org.apache.lucene.store.OutputStreamIndexOutput;
+import org.apache.lucene.util.Version;
 import org.opensearch.common.UUIDs;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.lucene.store.ByteArrayIndexInput;
@@ -77,6 +78,8 @@ public final class RemoteStoreTestUtils {
                 + randomIntBetween(1000, 5000)
                 + "::"
                 + randomIntBetween(512000, 1024000)
+                + "::"
+                + Version.MIN_SUPPORTED_MAJOR
         );
         metadata.put(
             prefix + ".cfs",
@@ -89,6 +92,8 @@ public final class RemoteStoreTestUtils {
                 + randomIntBetween(1000, 5000)
                 + "::"
                 + randomIntBetween(512000, 1024000)
+                + "::"
+                + Version.MIN_SUPPORTED_MAJOR
         );
         metadata.put(
             prefix + ".si",
@@ -101,6 +106,8 @@ public final class RemoteStoreTestUtils {
                 + randomIntBetween(1000, 5000)
                 + "::"
                 + randomIntBetween(512000, 1024000)
+                + "::"
+                + Version.LATEST.major
         );
         metadata.put(
             "segments_" + commitGeneration,
@@ -114,6 +121,8 @@ public final class RemoteStoreTestUtils {
                 + randomIntBetween(1000, 5000)
                 + "::"
                 + randomIntBetween(1024, 5120)
+                + "::"
+                + Version.LATEST.major
         );
         return metadata;
     }
