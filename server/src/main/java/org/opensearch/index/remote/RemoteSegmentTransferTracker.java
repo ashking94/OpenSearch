@@ -138,7 +138,8 @@ public class RemoteSegmentTransferTracker {
     private final Map<String, Long> latestLocalFileNameLengthMap = ConcurrentCollections.newConcurrentMap();
 
     /**
-     * Set of names of segment files that were uploaded as part of the most recent remote refresh.
+     * This contains the files from the last successful remote refresh and ongoing uploads. This gets reset to just the
+     * last successful remote refresh state on successful remote refresh.
      */
     private final Set<String> latestUploadedFiles = ConcurrentCollections.newConcurrentSet();
 
