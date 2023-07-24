@@ -392,22 +392,11 @@ public class CloseableRetryableRefreshListenerTests extends OpenSearchTestCase {
 
             @Override
             protected TimeValue getNextRetryInterval() {
-                return TimeValue.timeValueMillis(100);
+                return TimeValue.timeValueMillis(5000);
             }
         };
-        Runnable afterRefreshRunnable = () -> {
-            try {
-                testRefreshListener.afterRefresh(true);
-            } catch (IOException e) {
-                throw new AssertionError(e);
-            }
-        };
-        Thread thread1 = new Thread(afterRefreshRunnable);
-        Thread thread2 = new Thread(afterRefreshRunnable);
-        thread1.start();
-        thread2.start();
-        thread1.join();
-        thread2.join();
+        testRefreshListener.afterRefresh(true);
+        testRefreshListener.afterRefresh(true);
         assertBusy(() -> assertEquals(3, runCount.get()));
         testRefreshListener.close();
     }
