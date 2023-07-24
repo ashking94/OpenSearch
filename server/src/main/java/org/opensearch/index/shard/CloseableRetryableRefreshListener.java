@@ -53,17 +53,38 @@ public abstract class CloseableRetryableRefreshListener implements ReferenceMana
         if (closed.get()) {
             return;
         }
-        run(didRefresh, () -> {});
+        runAfterRefreshWithPermit(didRefresh, () -> {});
     }
 
+    /**
+     * By default, the retry thread pool name is returned as null. The implementor has the option to override the retry
+     * thread pool name. This will be used for scheduling the retries. The method would be invoked each time when a retry
+     * is required.
+     *
+     * @return the name of the retry thread pool.
+     */
     protected String getRetryThreadPoolName() {
         return null;
     }
 
+    /**
+     * By default, the retry interval is returned as null. The implementor has the option to override the retry interval.
+     * This is used for scheduling the next retry. The method would be invoked each time when a retry is required. The
+     * implementor can choose any retry strategy and return the next retry interval accordingly.
+     *
+     * @return the interval for the next retry.
+     */
     protected TimeValue getNextRetryInterval() {
         return null;
     }
 
+    /**
+     * This method is used to schedule retry which internally calls the performAfterRefresh method under the available permits.
+     *
+     * @param interval            interval after which the retry would be invoked
+     * @param retryThreadPoolName the thread pool name to be used for retry
+     * @param didRefresh          if didRefresh is true
+     */
     private void scheduleRetry(TimeValue interval, String retryThreadPoolName, boolean didRefresh) {
         // If the underlying listener has closed, then we do not allow even the retry to be scheduled
         if (closed.get()) {
@@ -81,7 +102,11 @@ public abstract class CloseableRetryableRefreshListener implements ReferenceMana
 
         boolean scheduled = false;
         try {
-            this.threadPool.schedule(() -> run(didRefresh, () -> retryScheduled.set(false)), interval, retryThreadPoolName);
+            this.threadPool.schedule(
+                () -> runAfterRefreshWithPermit(didRefresh, () -> retryScheduled.set(false)),
+                interval,
+                retryThreadPoolName
+            );
             scheduled = true;
             getLogger().info("Scheduled retry with didRefresh={}", didRefresh);
         } finally {
@@ -91,7 +116,11 @@ public abstract class CloseableRetryableRefreshListener implements ReferenceMana
         }
     }
 
-    private void run(boolean didRefresh, Runnable runFinally) {
+    /**
+     * Runs the performAfterRefresh method under permit. If there are no permits available, then it is no-op. It also hits
+     * the scheduleRetry method with the result value of the performAfterRefresh method invocation.
+     */
+    private void runAfterRefreshWithPermit(boolean didRefresh, Runnable runFinally) {
         boolean successful;
         boolean permitAcquired = semaphore.tryAcquire();
         try {
@@ -143,6 +172,12 @@ public abstract class CloseableRetryableRefreshListener implements ReferenceMana
     protected abstract Logger getLogger();
 
     // Visible for testing
+
+    /**
+     * Returns if the retry is scheduled or not.
+     *
+     * @return boolean as mentioned above.
+     */
     boolean getRetryScheduledStatus() {
         return retryScheduled.get();
     }
