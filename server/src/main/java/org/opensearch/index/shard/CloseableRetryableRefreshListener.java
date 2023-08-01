@@ -15,6 +15,7 @@ import org.opensearch.threadpool.ThreadPool;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Objects;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -45,6 +46,7 @@ public abstract class CloseableRetryableRefreshListener implements ReferenceMana
     }
 
     public CloseableRetryableRefreshListener(ThreadPool threadPool) {
+        assert Objects.nonNull(threadPool);
         this.threadPool = threadPool;
     }
 
@@ -53,29 +55,39 @@ public abstract class CloseableRetryableRefreshListener implements ReferenceMana
         if (closed.get()) {
             return;
         }
+        runAfterRefreshExactlyOnce(didRefresh);
         runAfterRefreshWithPermit(didRefresh, () -> {});
     }
 
     /**
-     * By default, the retry thread pool name is returned as null. The implementor has the option to override the retry
-     * thread pool name. This will be used for scheduling the retries. The method would be invoked each time when a retry
-     * is required.
+     * The code in this method is executed exactly once. This is done for running non-idempotent function which needs to be
+     * executed immediately when afterRefresh method is invoked.
+     *
+     * @param didRefresh if the refresh did open a new reference then didRefresh will be true
+     */
+    protected void runAfterRefreshExactlyOnce(boolean didRefresh) {
+        // No-op: The implementor would be providing the code
+    }
+
+    /**
+     * The implementor has the option to override the retry thread pool name. This will be used for scheduling the retries.
+     * The method would be invoked each time when a retry is required. By default, it uses the same threadpool for retry.
      *
      * @return the name of the retry thread pool.
      */
     protected String getRetryThreadPoolName() {
-        return null;
+        return ThreadPool.Names.SAME;
     }
 
     /**
-     * By default, the retry interval is returned as null. The implementor has the option to override the retry interval.
+     * By default, the retry interval is returned as 1s. The implementor has the option to override the retry interval.
      * This is used for scheduling the next retry. The method would be invoked each time when a retry is required. The
      * implementor can choose any retry strategy and return the next retry interval accordingly.
      *
      * @return the interval for the next retry.
      */
     protected TimeValue getNextRetryInterval() {
-        return null;
+        return TimeValue.timeValueSeconds(1);
     }
 
     /**
@@ -87,16 +99,12 @@ public abstract class CloseableRetryableRefreshListener implements ReferenceMana
      */
     private void scheduleRetry(TimeValue interval, String retryThreadPoolName, boolean didRefresh) {
         // If the underlying listener has closed, then we do not allow even the retry to be scheduled
-        if (closed.get()) {
+        if (closed.get() || isRetryEnabled() == false) {
             return;
         }
 
-        if (this.threadPool == null
-            || interval == null
-            || retryThreadPoolName == null
-            || ThreadPool.THREAD_POOL_TYPES.containsKey(retryThreadPoolName) == false
-            || interval == TimeValue.MINUS_ONE
-            || retryScheduled.compareAndSet(false, true) == false) {
+        assert Objects.nonNull(interval) && ThreadPool.THREAD_POOL_TYPES.containsKey(retryThreadPoolName);
+        if (retryScheduled.compareAndSet(false, true) == false) {
             return;
         }
 
@@ -117,6 +125,14 @@ public abstract class CloseableRetryableRefreshListener implements ReferenceMana
     }
 
     /**
+     * This returns if the retry is enabled or not. By default, the retries are not enabled.
+     * @return true if retry is enabled.
+     */
+    protected boolean isRetryEnabled() {
+        return false;
+    }
+
+    /**
      * Runs the performAfterRefresh method under permit. If there are no permits available, then it is no-op. It also hits
      * the scheduleRetry method with the result value of the performAfterRefresh method invocation.
      */
@@ -124,14 +140,13 @@ public abstract class CloseableRetryableRefreshListener implements ReferenceMana
         boolean successful;
         boolean permitAcquired = semaphore.tryAcquire();
         try {
-            successful = permitAcquired && performAfterRefresh(didRefresh);
+            successful = permitAcquired && performAfterRefreshWithPermit(didRefresh);
         } finally {
             if (permitAcquired) {
                 semaphore.release();
             }
             runFinally.run();
         }
-        assert permitAcquired;
         scheduleRetry(successful, didRefresh);
     }
 
@@ -148,12 +163,12 @@ public abstract class CloseableRetryableRefreshListener implements ReferenceMana
     }
 
     /**
-     * This method needs to be overridden and be provided with what needs to be run on after refresh.
+     * This method needs to be overridden and be provided with what needs to be run on after refresh with permits.
      *
      * @param didRefresh true if the refresh opened a new reference
      * @return true if a retry is needed else false.
      */
-    protected abstract boolean performAfterRefresh(boolean didRefresh);
+    protected abstract boolean performAfterRefreshWithPermit(boolean didRefresh);
 
     @Override
     public final void close() throws IOException {
@@ -161,6 +176,7 @@ public abstract class CloseableRetryableRefreshListener implements ReferenceMana
             if (semaphore.tryAcquire(TOTAL_PERMITS, 10, TimeUnit.MINUTES)) {
                 boolean result = closed.compareAndSet(false, true);
                 assert result && semaphore.availablePermits() == 0;
+                getLogger().info("Closed");
             } else {
                 throw new TimeoutException("timeout while closing gated refresh listener");
             }

@@ -189,69 +189,6 @@ public class RemoteSegmentStoreDirectoryTests extends IndexShardTestCase {
         assertEquals(Set.of(), actualCache.keySet());
     }
 
-    private Map<String, String> getDummyMetadata(String prefix, int commitGeneration) {
-        Map<String, String> metadata = new HashMap<>();
-
-        metadata.put(
-            prefix + ".cfe",
-            prefix
-                + ".cfe::"
-                + prefix
-                + ".cfe__"
-                + UUIDs.base64UUID()
-                + "::"
-                + randomIntBetween(1000, 5000)
-                + "::"
-                + randomIntBetween(512000, 1024000)
-                + "::"
-                + Version.MIN_SUPPORTED_MAJOR
-        );
-        metadata.put(
-            prefix + ".cfs",
-            prefix
-                + ".cfs::"
-                + prefix
-                + ".cfs__"
-                + UUIDs.base64UUID()
-                + "::"
-                + randomIntBetween(1000, 5000)
-                + "::"
-                + randomIntBetween(512000, 1024000)
-                + "::"
-                + Version.MIN_SUPPORTED_MAJOR
-        );
-        metadata.put(
-            prefix + ".si",
-            prefix
-                + ".si::"
-                + prefix
-                + ".si__"
-                + UUIDs.base64UUID()
-                + "::"
-                + randomIntBetween(1000, 5000)
-                + "::"
-                + randomIntBetween(512000, 1024000)
-                + "::"
-                + Version.LATEST.major
-        );
-        metadata.put(
-            "segments_" + commitGeneration,
-            "segments_"
-                + commitGeneration
-                + "::segments_"
-                + commitGeneration
-                + "__"
-                + UUIDs.base64UUID()
-                + "::"
-                + randomIntBetween(1000, 5000)
-                + "::"
-                + randomIntBetween(1024, 5120)
-                + "::"
-                + Version.LATEST.major
-        );
-        return metadata;
-    }
-
     private Map<String, Map<String, String>> populateMetadata() throws IOException {
         List<String> metadataFiles = new ArrayList<>();
 

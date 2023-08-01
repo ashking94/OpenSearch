@@ -30,6 +30,7 @@ import org.opensearch.index.engine.InternalEngine;
 import org.opensearch.index.remote.RemoteSegmentTransferTracker;
 import org.opensearch.index.seqno.SequenceNumbers;
 import org.opensearch.index.store.RemoteSegmentStoreDirectory;
+import org.opensearch.index.store.remote.metadata.RemoteSegmentMetadata;
 import org.opensearch.index.translog.Translog;
 import org.opensearch.indices.replication.checkpoint.ReplicationCheckpoint;
 import org.opensearch.indices.replication.checkpoint.SegmentReplicationCheckpointPublisher;
@@ -66,6 +67,8 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
      */
     private static final int REMOTE_REFRESH_RETRY_MAX_INTERVAL_MILLIS = 10_000;
 
+    private static final int INVALID_PRIMARY_TERM = -1;
+
     /**
      * Exponential back off policy with max retry interval.
      */
@@ -100,7 +103,17 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
         this.remoteDirectory = (RemoteSegmentStoreDirectory) ((FilterDirectory) ((FilterDirectory) indexShard.remoteStore().directory())
             .getDelegate()).getDelegate();
         localSegmentChecksumMap = new HashMap<>();
-        this.primaryTerm = remoteDirectory.getPrimaryTermAtInit();
+        RemoteSegmentMetadata remoteSegmentMetadata = null;
+        if (indexShard.routingEntry().primary()) {
+            try {
+                remoteSegmentMetadata = this.remoteDirectory.init();
+            } catch (IOException e) {
+                logger.error("Exception while initialising RemoteSegmentStoreDirectory", e);
+            }
+        }
+        // initializing primary term with the primary term of latest metadata in remote store.
+        // if no metadata is present, this value will be initialized with -1.
+        this.primaryTerm = remoteSegmentMetadata != null ? remoteSegmentMetadata.getPrimaryTerm() : INVALID_PRIMARY_TERM;
         this.segmentTracker = segmentTracker;
         resetBackOffDelayIterator();
         this.checkpointPublisher = checkpointPublisher;
@@ -129,6 +142,25 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
     @Override
     public void beforeRefresh() throws IOException {}
 
+    @Override
+    protected void runAfterRefreshExactlyOnce(boolean didRefresh) {
+        if (shouldSync(didRefresh)) {
+            updateLocalRefreshTimeAndSeqNo();
+            try {
+                if (this.primaryTerm != indexShard.getOperationPrimaryTerm()) {
+                    this.primaryTerm = indexShard.getOperationPrimaryTerm();
+                    this.remoteDirectory.init();
+                }
+                try (GatedCloseable<SegmentInfos> segmentInfosGatedCloseable = indexShard.getSegmentInfosSnapshot()) {
+                    Collection<String> localSegmentsPostRefresh = segmentInfosGatedCloseable.get().files(true);
+                    updateLocalSizeMapAndTracker(localSegmentsPostRefresh);
+                }
+            } catch (Throwable t) {
+                logger.error("Exception in runAfterRefreshExactlyOnce() method", t);
+            }
+        }
+    }
+
     /**
      * Upload new segment files created as part of the last refresh to the remote segment store.
      * This method also uploads remote_segments_metadata file which contains metadata of each segment file uploaded.
@@ -137,18 +169,22 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
      * @return true if the method runs successfully.
      */
     @Override
-    protected synchronized boolean performAfterRefresh(boolean didRefresh) {
+    protected synchronized boolean performAfterRefreshWithPermit(boolean didRefresh) {
         boolean successful;
         // The third condition exists for uploading the zero state segments where the refresh has not changed the reader reference, but it
         // is important to upload the zero state segments so that the restore does not break.
-        if (this.primaryTerm != indexShard.getOperationPrimaryTerm()
-            || didRefresh
-            || remoteDirectory.getSegmentsUploadedToRemoteStore().isEmpty()) {
+        if (shouldSync(didRefresh)) {
             successful = syncSegments();
         } else {
             successful = true;
         }
         return successful;
+    }
+
+    private boolean shouldSync(boolean didRefresh) {
+        return this.primaryTerm != indexShard.getOperationPrimaryTerm()
+            || didRefresh
+            || remoteDirectory.getSegmentsUploadedToRemoteStore().isEmpty();
     }
 
     private boolean syncSegments() {
@@ -169,10 +205,6 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
         final AtomicBoolean successful = new AtomicBoolean(false);
 
         try {
-            if (this.primaryTerm != indexShard.getOperationPrimaryTerm()) {
-                this.primaryTerm = indexShard.getOperationPrimaryTerm();
-                this.remoteDirectory.init();
-            }
             try {
                 // if a new segments_N file is present in local that is not uploaded to remote store yet, it
                 // is considered as a first refresh post commit. A cleanup of stale commit files is triggered.
@@ -413,8 +445,22 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
         }
     }
 
+    /**
+     * Updates the last refresh time and refresh seq no which is seen by local store.
+     */
+    private void updateLocalRefreshTimeAndSeqNo() {
+        segmentTracker.updateLocalRefreshClockTimeMs(System.currentTimeMillis());
+        segmentTracker.updateLocalRefreshTimeMs(System.nanoTime() / 1_000_000L);
+        segmentTracker.updateLocalRefreshSeqNo(segmentTracker.getLocalRefreshSeqNo() + 1);
+    }
+
     @Override
     protected Logger getLogger() {
         return logger;
+    }
+
+    @Override
+    protected boolean isRetryEnabled() {
+        return true;
     }
 }
