@@ -107,7 +107,10 @@ public class RemoteStoreRefreshListenerTests extends IndexShardTestCase {
     public void testRemoteDirectoryInitThrowsException() throws IOException {
         // Methods used in the constructor of RemoteSegmentTrackerListener have been mocked to reproduce specific exceptions
         // to test the failure modes possible during construction of RemoteSegmentTrackerListener object.
-        Settings indexSettings = Settings.builder().put(IndexMetadata.SETTING_VERSION_CREATED, org.opensearch.Version.CURRENT).build();
+        Settings indexSettings = Settings.builder()
+            .put(IndexMetadata.SETTING_VERSION_CREATED, org.opensearch.Version.CURRENT)
+            .put(SETTING_REPLICATION_TYPE, ReplicationType.SEGMENT)
+            .build();
         indexShard = newStartedShard(false, indexSettings, new NRTReplicationEngineFactory());
 
         // Mocking the IndexShard methods and dependent classes.
@@ -143,7 +146,7 @@ public class RemoteStoreRefreshListenerTests extends IndexShardTestCase {
         }
 
         when(remoteMetadataDirectory.openInput(any(), any())).thenAnswer(
-            I -> createMetadataFileBytes(getDummyMetadata("_0", 1), 1, 12, segmentInfos)
+            I -> createMetadataFileBytes(getDummyMetadata("_0", 1), indexShard.getLatestReplicationCheckpoint(), segmentInfos)
         );
         RemoteSegmentStoreDirectory remoteSegmentStoreDirectory = new RemoteSegmentStoreDirectory(
             mock(RemoteDirectory.class),
@@ -480,7 +483,7 @@ public class RemoteStoreRefreshListenerTests extends IndexShardTestCase {
         when(remoteStore.directory()).thenReturn(remoteStoreFilterDirectory);
 
         // Mock indexShard.getOperationPrimaryTerm()
-        when(shard.getOperationPrimaryTerm()).thenReturn(indexShard.getOperationPrimaryTerm());
+        when(shard.getLatestReplicationCheckpoint()).thenReturn(indexShard.getLatestReplicationCheckpoint());
 
         // Mock indexShard.routingEntry().primary()
         when(shard.routingEntry()).thenReturn(indexShard.routingEntry());

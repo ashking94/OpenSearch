@@ -19,6 +19,7 @@ import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.lucene.store.ByteArrayIndexInput;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.index.store.remote.metadata.RemoteSegmentMetadata;
+import org.opensearch.indices.replication.checkpoint.ReplicationCheckpoint;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -37,14 +38,14 @@ public final class RemoteStoreTestUtils {
 
     /**
      * Prepares metadata file bytes with header and footer
+     *
      * @param segmentFilesMap: actual metadata content
      * @return ByteArrayIndexInput: metadata file bytes with header and footer
      * @throws IOException IOException
      */
     public static ByteArrayIndexInput createMetadataFileBytes(
         Map<String, String> segmentFilesMap,
-        long generation,
-        long primaryTerm,
+        ReplicationCheckpoint replicationCheckpoint,
         SegmentInfos segmentInfos
     ) throws IOException {
         ByteBuffersDataOutput byteBuffersIndexOutput = new ByteBuffersDataOutput();
@@ -55,8 +56,7 @@ public final class RemoteStoreTestUtils {
         OutputStreamIndexOutput indexOutput = new OutputStreamIndexOutput("segment metadata", "metadata output stream", output, 4096);
         CodecUtil.writeHeader(indexOutput, RemoteSegmentMetadata.METADATA_CODEC, RemoteSegmentMetadata.CURRENT_VERSION);
         indexOutput.writeMapOfStrings(segmentFilesMap);
-        indexOutput.writeLong(generation);
-        indexOutput.writeLong(primaryTerm);
+        RemoteSegmentMetadata.writeCheckpointToIndexOutput(replicationCheckpoint, indexOutput);
         indexOutput.writeLong(byteArray.length);
         indexOutput.writeBytes(byteArray, byteArray.length);
         CodecUtil.writeFooter(indexOutput);
