@@ -145,7 +145,7 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
     @Override
     protected void runAfterRefreshExactlyOnce(boolean didRefresh) {
         if (shouldSync(didRefresh)) {
-            updateLocalRefreshTimeAndSeqNo();
+            segmentTracker.updateLocalRefreshTimeAndSeqNo();
             try {
                 if (this.primaryTerm != indexShard.getOperationPrimaryTerm()) {
                     this.primaryTerm = indexShard.getOperationPrimaryTerm();
@@ -444,15 +444,6 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
         } else {
             segmentTracker.incrementTotalUploadsFailed();
         }
-    }
-
-    /**
-     * Updates the last refresh time and refresh seq no which is seen by local store.
-     */
-    private void updateLocalRefreshTimeAndSeqNo() {
-        segmentTracker.updateLocalRefreshClockTimeMs(System.currentTimeMillis());
-        segmentTracker.updateLocalRefreshTimeMs(System.nanoTime() / 1_000_000L);
-        segmentTracker.updateLocalRefreshSeqNo(segmentTracker.getLocalRefreshSeqNo() + 1);
     }
 
     @Override

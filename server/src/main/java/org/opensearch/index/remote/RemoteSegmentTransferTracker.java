@@ -215,7 +215,8 @@ public class RemoteSegmentTransferTracker {
         return localRefreshSeqNo;
     }
 
-    public void updateLocalRefreshSeqNo(long localRefreshSeqNo) {
+    // Visible for testing
+    void updateLocalRefreshSeqNo(long localRefreshSeqNo) {
         assert localRefreshSeqNo >= this.localRefreshSeqNo : "newLocalRefreshSeqNo="
             + localRefreshSeqNo
             + " < "
@@ -233,7 +234,17 @@ public class RemoteSegmentTransferTracker {
         return localRefreshClockTimeMs;
     }
 
-    public void updateLocalRefreshTimeMs(long localRefreshTimeMs) {
+    /**
+     * Updates the last refresh time and refresh seq no which is seen by local store.
+     */
+    public void updateLocalRefreshTimeAndSeqNo() {
+        updateLocalRefreshClockTimeMs(System.currentTimeMillis());
+        updateLocalRefreshTimeMs(System.nanoTime() / 1_000_000L);
+        updateLocalRefreshSeqNo(getLocalRefreshSeqNo() + 1);
+    }
+
+    // Visible for testing
+    void updateLocalRefreshTimeMs(long localRefreshTimeMs) {
         assert localRefreshTimeMs >= this.localRefreshTimeMs : "newLocalRefreshTimeMs="
             + localRefreshTimeMs
             + " < "
@@ -243,7 +254,7 @@ public class RemoteSegmentTransferTracker {
         computeTimeMsLag();
     }
 
-    public void updateLocalRefreshClockTimeMs(long localRefreshClockTimeMs) {
+    private void updateLocalRefreshClockTimeMs(long localRefreshClockTimeMs) {
         this.localRefreshClockTimeMs = localRefreshClockTimeMs;
     }
 

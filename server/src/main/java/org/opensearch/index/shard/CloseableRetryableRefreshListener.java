@@ -104,7 +104,10 @@ public abstract class CloseableRetryableRefreshListener implements ReferenceMana
         }
 
         assert Objects.nonNull(interval) && ThreadPool.THREAD_POOL_TYPES.containsKey(retryThreadPoolName);
-        if (retryScheduled.compareAndSet(false, true) == false) {
+
+        // If the retryScheduled is already true, then we return from here itself. If not, then we proceed with scheduling
+        // the retry.
+        if (retryScheduled.getAndSet(true)) {
             return;
         }
 
