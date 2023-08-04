@@ -28,6 +28,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public abstract class CloseableRetryableRefreshListener implements ReferenceManager.RefreshListener, Closeable {
 
+    /**
+     * Total permits = 1 ensures that there is only single instance of runAfterRefreshWithPermit that is running at a time.
+     * In case there are use cases where concurrency is required, the total permit variable can be put inside the ctor.
+     */
     private static final int TOTAL_PERMITS = 1;
 
     private final AtomicBoolean closed = new AtomicBoolean(false);
@@ -138,8 +142,13 @@ public abstract class CloseableRetryableRefreshListener implements ReferenceMana
     /**
      * Runs the performAfterRefresh method under permit. If there are no permits available, then it is no-op. It also hits
      * the scheduleRetry method with the result value of the performAfterRefresh method invocation.
+     * The synchronised block ensures that if there is a retry or afterRefresh waiting, then it waits until the previous
+     * execution finishes.
      */
     private synchronized void runAfterRefreshWithPermit(boolean didRefresh, Runnable runFinally) {
+        if (closed.get()) {
+            return;
+        }
         boolean successful;
         boolean permitAcquired = semaphore.tryAcquire();
         try {
