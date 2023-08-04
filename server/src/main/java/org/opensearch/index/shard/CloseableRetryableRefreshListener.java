@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public abstract class CloseableRetryableRefreshListener implements ReferenceManager.RefreshListener, Closeable {
 
-    private static final int TOTAL_PERMITS = Integer.MAX_VALUE;
+    private static final int TOTAL_PERMITS = 1;
 
     private final AtomicBoolean closed = new AtomicBoolean(false);
 
@@ -139,7 +139,7 @@ public abstract class CloseableRetryableRefreshListener implements ReferenceMana
      * Runs the performAfterRefresh method under permit. If there are no permits available, then it is no-op. It also hits
      * the scheduleRetry method with the result value of the performAfterRefresh method invocation.
      */
-    private void runAfterRefreshWithPermit(boolean didRefresh, Runnable runFinally) {
+    private synchronized void runAfterRefreshWithPermit(boolean didRefresh, Runnable runFinally) {
         boolean successful;
         boolean permitAcquired = semaphore.tryAcquire();
         try {

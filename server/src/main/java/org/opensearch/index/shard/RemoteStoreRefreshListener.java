@@ -169,7 +169,7 @@ public final class RemoteStoreRefreshListener extends CloseableRetryableRefreshL
      * @return true if the method runs successfully.
      */
     @Override
-    protected synchronized boolean performAfterRefreshWithPermit(boolean didRefresh) {
+    protected boolean performAfterRefreshWithPermit(boolean didRefresh) {
         boolean successful;
         // The third condition exists for uploading the zero state segments where the refresh has not changed the reader reference, but it
         // is important to upload the zero state segments so that the restore does not break.
