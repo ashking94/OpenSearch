@@ -184,11 +184,21 @@ public class RemoteFsTranslog extends Translog {
 
     @Override
     public boolean ensureSynced(Location location) throws IOException {
-        try (ReleasableLock ignored = writeLock.acquire()) {
-            assert location.generation <= current.getGeneration();
-            if (location.generation == current.getGeneration()) {
-                ensureOpen();
-                return prepareAndUpload(primaryTermSupplier.getAsLong(), location.generation);
+
+        try {
+            boolean shouldUpload = false;
+            try (ReleasableLock ignored = writeLock.acquire()) {
+                assert location.generation <= current.getGeneration();
+                if (location.generation == current.getGeneration()) {
+                    ensureOpen();
+                    if (prepareForUpload(location.generation) == false) {
+                        return false;
+                    }
+                    shouldUpload = true;
+                }
+            }
+            if (shouldUpload) {
+                wrapUpload(primaryTermSupplier.getAsLong(), location.generation);
             }
         } catch (final Exception ex) {
             closeOnTragicEvent(ex);
@@ -203,10 +213,11 @@ public class RemoteFsTranslog extends Translog {
         if (current.totalOperations() == 0 && primaryTermSupplier.getAsLong() == current.getPrimaryTerm()) {
             return;
         }
-        prepareAndUpload(primaryTermSupplier.getAsLong(), null);
+        prepareForUpload(null);
+        wrapUpload(primaryTermSupplier.getAsLong(), null);
     }
 
-    private boolean prepareAndUpload(Long primaryTerm, Long generation) throws IOException {
+    private boolean prepareForUpload(Long generation) throws IOException {
         try (Releasable ignored = writeLock.acquire()) {
             if (generation == null || generation == current.getGeneration()) {
                 try {
@@ -222,24 +233,25 @@ public class RemoteFsTranslog extends Translog {
                     closeOnTragicEvent(e);
                     throw e;
                 }
-            } else if (generation < current.getGeneration()) {
-                return false;
-            }
+            } else return generation >= current.getGeneration();
+            return true;
+        }
+    }
 
-            // Do we need remote writes in sync fashion ?
-            // If we don't , we should swallow FileAlreadyExistsException while writing to remote store
-            // and also verify for same during primary-primary relocation
-            // Writing remote in sync fashion doesn't hurt as global ckp update
-            // is not updated in remote translog except in primary to primary recovery.
-            if (generation == null) {
-                if (closed.get() == false) {
-                    return upload(primaryTerm, current.getGeneration() - 1);
-                } else {
-                    return upload(primaryTerm, current.getGeneration());
-                }
+    private boolean wrapUpload(Long primaryTerm, Long generation) throws IOException {
+        // Do we need remote writes in sync fashion ?
+        // If we don't , we should swallow FileAlreadyExistsException while writing to remote store
+        // and also verify for same during primary-primary relocation
+        // Writing remote in sync fashion doesn't hurt as global ckp update
+        // is not updated in remote translog except in primary to primary recovery.
+        if (generation == null) {
+            if (closed.get() == false) {
+                return upload(primaryTerm, current.getGeneration() - 1);
             } else {
-                return upload(primaryTerm, generation);
+                return upload(primaryTerm, current.getGeneration());
             }
+        } else {
+            return upload(primaryTerm, generation);
         }
     }
 
@@ -309,7 +321,8 @@ public class RemoteFsTranslog extends Translog {
     public void sync() throws IOException {
         try {
             if (syncToDisk() || syncNeeded()) {
-                prepareAndUpload(primaryTermSupplier.getAsLong(), null);
+                prepareForUpload(null);
+                wrapUpload(primaryTermSupplier.getAsLong(), null);
             }
         } catch (final Exception e) {
             tragedy.setTragicException(e);
