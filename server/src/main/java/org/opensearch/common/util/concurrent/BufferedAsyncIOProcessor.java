@@ -77,7 +77,9 @@ public abstract class BufferedAsyncIOProcessor<Item> extends AsyncIOProcessor<It
     }
 
     private void process() {
+        long startTime = System.currentTimeMillis();
         drainAndProcessAndRelease(new ArrayList<>());
+        getLogger().info("translogSyncTime={}", (System.currentTimeMillis() - startTime));
         scheduleProcess();
     }
 

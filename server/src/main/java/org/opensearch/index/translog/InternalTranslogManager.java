@@ -324,7 +324,10 @@ public class InternalTranslogManager implements TranslogManager, Closeable {
      */
     @Override
     public Translog.Location add(Translog.Operation operation) throws IOException {
-        return translog.add(operation);
+        long startTime = System.currentTimeMillis();
+        Translog.Location location = translog.add(operation);
+        logger.info("translogAddTime={}", (System.currentTimeMillis() - startTime));
+        return location;
     }
 
     /**
