@@ -111,6 +111,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
@@ -164,6 +165,7 @@ public class MetadataCreateIndexService {
     private final Set<IndexSettingProvider> indexSettingProviders = new HashSet<>();
     private final ClusterManagerTaskThrottler.ThrottlingKey createIndexTaskKey;
     private AwarenessReplicaBalance awarenessReplicaBalance;
+    private static final Random random = new Random();
 
     public MetadataCreateIndexService(
         final Settings settings,
@@ -889,7 +891,7 @@ public class MetadataCreateIndexService {
             indexSettingsBuilder.put(SETTING_CREATION_DATE, Instant.now().toEpochMilli());
         }
         indexSettingsBuilder.put(IndexMetadata.SETTING_INDEX_PROVIDED_NAME, request.getProvidedName());
-        indexSettingsBuilder.put(SETTING_INDEX_UUID, UUIDs.randomBase64UUID());
+        indexSettingsBuilder.put(SETTING_INDEX_UUID, Integer.toBinaryString(random.nextInt(256)) + UUIDs.randomBase64UUID());
 
         updateReplicationStrategy(indexSettingsBuilder, request.settings(), settings);
         updateRemoteStoreSettings(indexSettingsBuilder, settings);
