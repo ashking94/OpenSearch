@@ -8,8 +8,10 @@
 
 package org.opensearch.index.translog.transfer;
 
+import org.apache.logging.log4j.Logger;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.index.translog.TranslogReader;
+import org.opensearch.index.translog.TranslogWriter;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -114,24 +116,31 @@ public class TranslogCheckpointTransferSnapshot implements TransferSnapshot, Clo
      * Builder for {@link TranslogCheckpointTransferSnapshot}
      */
     public static class Builder {
+
+        private final Logger logger;
         private final long primaryTerm;
         private final long generation;
         private final List<TranslogReader> readers;
+        private final TranslogWriter current;
         private final Function<Long, String> checkpointGenFileNameMapper;
         private final Path location;
         private final String nodeId;
 
         public Builder(
+            Logger logger,
             long primaryTerm,
             long generation,
             Path location,
             List<TranslogReader> readers,
+            TranslogWriter current,
             Function<Long, String> checkpointGenFileNameMapper,
             String nodeId
         ) {
+            this.logger = logger;
             this.primaryTerm = primaryTerm;
             this.generation = generation;
             this.readers = readers;
+            this.current = current;
             this.checkpointGenFileNameMapper = checkpointGenFileNameMapper;
             this.location = location;
             this.nodeId = nodeId;
@@ -177,7 +186,18 @@ public class TranslogCheckpointTransferSnapshot implements TransferSnapshot, Clo
             translogTransferSnapshot.setMinTranslogGeneration(highestGenMinTranslogGeneration);
 
             assert this.primaryTerm == highestGenPrimaryTerm : "inconsistent primary term";
-            assert this.generation == highestGeneration : " inconsistent generation ";
+            boolean validHighestGen = this.generation == highestGeneration;
+
+            if (validHighestGen == false) {
+                logger.warn(
+                    "Highest generation of readers is higher than the current translog writer's generation readersGen={} suppliedWriterGen={} currentWriterGen={}",
+                    generations,
+                    generation,
+                    current.getGeneration()
+                );
+            }
+            assert validHighestGen : " inconsistent generation ";
+
             final long finalHighestGeneration = highestGeneration;
             assert LongStream.iterate(lowestGeneration, i -> i + 1)
                 .limit(highestGeneration)

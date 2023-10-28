@@ -324,10 +324,12 @@ public class RemoteFsTranslog extends Translog {
         logger.trace("uploading translog for {} {}", primaryTerm, generation);
         try (
             TranslogCheckpointTransferSnapshot transferSnapshotProvider = new TranslogCheckpointTransferSnapshot.Builder(
+                logger,
                 primaryTerm,
                 generation,
                 location,
                 readers,
+                current,
                 Translog::getCommitCheckpointFileName,
                 config.getNodeId()
             ).build()
