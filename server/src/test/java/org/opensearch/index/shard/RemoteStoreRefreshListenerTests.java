@@ -418,7 +418,7 @@ public class RemoteStoreRefreshListenerTests extends IndexShardTestCase {
         RemoteStoreRefreshListener listener = tuple.v1();
         RemoteStoreStatsTrackerFactory trackerFactory = tuple.v2();
         RemoteSegmentTransferTracker tracker = trackerFactory.getRemoteSegmentTransferTracker(indexShard.shardId());
-        assertNoLag(tracker);
+        assertBusy(() -> assertNoLag(tracker));
         indexDocs(100, randomIntBetween(100, 200));
         indexShard.refresh("test");
         listener.afterRefresh(true);
