@@ -553,6 +553,7 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory implement
 
     private void postUpload(Directory from, String src, String remoteFilename, String checksum) throws IOException {
         UploadedSegmentMetadata segmentMetadata = new UploadedSegmentMetadata(src, remoteFilename, checksum, from.fileLength(src));
+        logger.info("postUpload file={} segmentsUploadedToRemoteStore={}", src, segmentsUploadedToRemoteStore.keySet());
         segmentsUploadedToRemoteStore.put(src, segmentMetadata);
     }
 
@@ -619,6 +620,7 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory implement
                             metadata.setWrittenByMajor(segmentToLuceneVersion.get(metadata.originalFilename));
                             uploadedSegments.put(file, metadata.toString());
                         } else {
+                            logger.info("segmentsUploadedToRemoteStore={} in uploadMetadata", segmentsUploadedToRemoteStore.keySet());
                             throw new NoSuchFileException(file);
                         }
                     }
