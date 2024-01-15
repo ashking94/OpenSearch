@@ -330,7 +330,17 @@ public class RemoteSegmentTransferTracker extends RemoteTransferTracker {
             });
         Set<String> fileSet = new HashSet<>(segmentFiles);
         // Remove keys from the fileSizeMap that do not exist in the latest segment files
-        latestLocalFileNameLengthMap.entrySet().removeIf(entry -> fileSet.contains(entry.getKey()) == false);
+        latestLocalFileNameLengthMap.entrySet().removeIf(entry -> {
+            if (fileSet.contains(entry.getKey()) == false) {
+                try {
+                    throw new RuntimeException();
+                } catch (Exception e) {
+                    logger.info("file missing {}", entry.getKey(), e);
+                }
+                return true;
+            }
+            return false;
+        });
         computeBytesLag();
     }
 
