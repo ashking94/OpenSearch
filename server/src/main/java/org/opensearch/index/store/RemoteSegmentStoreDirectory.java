@@ -146,11 +146,18 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory implement
         logger.debug("Start initialisation of remote segment metadata");
         RemoteSegmentMetadata remoteSegmentMetadata = readLatestMetadataFile();
         if (remoteSegmentMetadata != null) {
+            logger.info("this");
             this.segmentsUploadedToRemoteStore = new ConcurrentHashMap<>(remoteSegmentMetadata.getMetadata());
         } else {
+            logger.info("that");
             this.segmentsUploadedToRemoteStore = new ConcurrentHashMap<>();
         }
         logger.debug("Initialisation of remote segment metadata completed");
+        try {
+            throw new RuntimeException();
+        } catch (Exception e) {
+            logger.info("init()", e);
+        }
         return remoteSegmentMetadata;
     }
 
