@@ -387,6 +387,11 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory implement
         if (remoteFilename != null) {
             remoteDataDirectory.deleteFile(remoteFilename);
             segmentsUploadedToRemoteStore.remove(name);
+            try {
+                throw new RuntimeException();
+            } catch (Exception e) {
+                logger.error("deleting {}", name, e);
+            }
         }
     }
 
@@ -797,6 +802,11 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory implement
                         deletedSegmentFiles.add(file);
                         if (!activeSegmentFilesMetadataMap.containsKey(getLocalSegmentFilename(file))) {
                             segmentsUploadedToRemoteStore.remove(getLocalSegmentFilename(file));
+                            try {
+                                throw new RuntimeException();
+                            } catch (Exception e) {
+                                logger.info("deleting file={}", file, e);
+                            }
                         }
                     } catch (NoSuchFileException e) {
                         logger.info("Segment file {} corresponding to metadata file {} does not exist in remote", file, metadataFile);
