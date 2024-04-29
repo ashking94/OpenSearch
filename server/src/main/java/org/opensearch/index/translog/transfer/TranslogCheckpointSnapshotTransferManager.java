@@ -17,9 +17,11 @@ import java.util.Set;
 
 public interface TranslogCheckpointSnapshotTransferManager {
 
-    public void transferTranslogCheckpointSnapshot(TransferSnapshot transferSnapshot,
-                                                   Set<TranslogCheckpointSnapshot> toUpload,
-                                                   Map<Long, BlobPath> blobPathMap,
-                                                   LatchedActionListener<TranslogCheckpointSnapshot> latchedActionListener,
-                                                   WritePriority writePriority) throws Exception;
+    public void transferTranslogCheckpointSnapshot(
+        TransferSnapshot transferSnapshot,
+        Set<TranslogCheckpointSnapshot> toUpload,
+        Map<Long, BlobPath> blobPathMap,
+        LatchedActionListener<TranslogCheckpointSnapshot> latchedActionListener,
+        WritePriority writePriority
+    ) throws Exception;
 }

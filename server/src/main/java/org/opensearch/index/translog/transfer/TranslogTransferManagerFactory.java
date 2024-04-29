@@ -18,18 +18,28 @@ public class TranslogTransferManagerFactory {
     private final RemoteStoreSettings remoteStoreSettings;
     private final ShardId shardId;
 
-    public TranslogTransferManagerFactory(TransferService transferService, FileTransferTracker fileTransferTracker, RemoteStoreSettings remoteStoreSettings,  ShardId shardId) {
+    public TranslogTransferManagerFactory(
+        TransferService transferService,
+        FileTransferTracker fileTransferTracker,
+        RemoteStoreSettings remoteStoreSettings,
+        ShardId shardId
+    ) {
         this.transferService = transferService;
         this.fileTransferTracker = fileTransferTracker;
         this.remoteStoreSettings = remoteStoreSettings;
         this.shardId = shardId;
     }
 
-    public TranslogCheckpointSnapshotTransferManager getTranslogCheckpointSnapshotTransferManager(boolean isBlobMetadataSupported){
-        if(isBlobMetadataSupported){
+    public TranslogCheckpointSnapshotTransferManager getTranslogCheckpointSnapshotTransferManager(boolean isBlobMetadataSupported) {
+        if (isBlobMetadataSupported) {
             return new TranslogCheckpointSnapshotTransferManagerWithMetadata(transferService);
-        }else{
-            return new TranslogCheckpointSnapshotTransferManagerWithoutMetadata(transferService, fileTransferTracker, remoteStoreSettings, shardId);
+        } else {
+            return new TranslogCheckpointSnapshotTransferManagerWithoutMetadata(
+                transferService,
+                fileTransferTracker,
+                remoteStoreSettings,
+                shardId
+            );
         }
     }
 }

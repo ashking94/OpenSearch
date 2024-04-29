@@ -8,6 +8,12 @@
 
 package org.opensearch.index.translog.transfer;
 
+import org.opensearch.index.translog.Checkpoint;
+import org.opensearch.index.translog.TranslogCheckedContainer;
+import org.opensearch.index.translog.transfer.FileSnapshot.CheckpointFileSnapshot;
+import org.opensearch.index.translog.transfer.FileSnapshot.TransferFileSnapshot;
+import org.opensearch.index.translog.transfer.FileSnapshot.TranslogFileSnapshot;
+
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.file.Path;
@@ -15,12 +21,6 @@ import java.nio.file.StandardOpenOption;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
-
-import org.opensearch.index.translog.Checkpoint;
-import org.opensearch.index.translog.TranslogCheckedContainer;
-import org.opensearch.index.translog.transfer.FileSnapshot.TransferFileSnapshot;
-import org.opensearch.index.translog.transfer.FileSnapshot.TranslogFileSnapshot;
-import org.opensearch.index.translog.transfer.FileSnapshot.CheckpointFileSnapshot;
 
 import static org.opensearch.index.translog.transfer.TranslogTransferManager.CHECKPOINT_FILE_DATA_KEY;
 
@@ -35,7 +35,16 @@ public class TranslogCheckpointSnapshot {
     private final Long checkpointChecksum;
     private final Checkpoint checkpoint;
 
-    public TranslogCheckpointSnapshot(long primaryTerm, long generation, long minTranslogGeneration, Path translogPath, Path checkpointPath, Long translogChecksum, Long checkpointChecksum, Checkpoint checkpoint){
+    public TranslogCheckpointSnapshot(
+        long primaryTerm,
+        long generation,
+        long minTranslogGeneration,
+        Path translogPath,
+        Path checkpointPath,
+        Long translogChecksum,
+        Long checkpointChecksum,
+        Checkpoint checkpoint
+    ) {
         this.primaryTerm = primaryTerm;
         this.generation = generation;
         this.minTranslogGeneration = minTranslogGeneration;
@@ -46,11 +55,11 @@ public class TranslogCheckpointSnapshot {
         this.checkpoint = checkpoint;
     }
 
-    public String getTranslogFileName(){
-         return translogPath.getFileName().toString();
+    public String getTranslogFileName() {
+        return translogPath.getFileName().toString();
     }
 
-    public String getCheckpointFileName(){
+    public String getCheckpointFileName() {
         return checkpointPath.getFileName().toString();
     }
 
@@ -101,9 +110,7 @@ public class TranslogCheckpointSnapshot {
         Long calculatedChecksum = translogCheckedContainer.getChecksum();
 
         if (checkpointChecksum != null && !checkpointChecksum.equals(calculatedChecksum)) {
-            throw new TranslogUploadFailedException(
-                "Checksum validation of checkpoint file failed for translog file:"
-            );
+            throw new TranslogUploadFailedException("Checksum validation of checkpoint file failed for translog file:");
         }
 
         // Set the file data value
@@ -112,12 +119,5 @@ public class TranslogCheckpointSnapshot {
 
         return metadata;
     }
-
-
-
-
-
-
-
 
 }

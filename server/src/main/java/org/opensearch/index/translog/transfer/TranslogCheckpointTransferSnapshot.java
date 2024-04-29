@@ -52,7 +52,11 @@ public class TranslogCheckpointTransferSnapshot implements TransferSnapshot, Clo
         this.nodeId = nodeId;
     }
 
-    private void add(TranslogFileSnapshot translogFileSnapshot, CheckpointFileSnapshot checkPointFileSnapshot, TranslogCheckpointSnapshot translogCheckpointSnapshot) {
+    private void add(
+        TranslogFileSnapshot translogFileSnapshot,
+        CheckpointFileSnapshot checkPointFileSnapshot,
+        TranslogCheckpointSnapshot translogCheckpointSnapshot
+    ) {
         translogCheckpointFileInfoTupleSet.add(Tuple.tuple(translogFileSnapshot, checkPointFileSnapshot));
 
         translogCheckpointSnapshotSet.add(translogCheckpointSnapshot);
@@ -80,7 +84,7 @@ public class TranslogCheckpointTransferSnapshot implements TransferSnapshot, Clo
     }
 
     @Override
-    public Set<TranslogCheckpointSnapshot> getTranslogCheckpointSnapshots(){
+    public Set<TranslogCheckpointSnapshot> getTranslogCheckpointSnapshots() {
         return translogCheckpointSnapshotSet;
     }
 
@@ -175,7 +179,16 @@ public class TranslogCheckpointTransferSnapshot implements TransferSnapshot, Clo
                         checkpointPath,
                         reader.getCheckpointChecksum()
                     ),
-                    new TranslogCheckpointSnapshot(readerPrimaryTerm, readerGeneration, minTranslogGeneration, translogPath, checkpointPath, reader.getTranslogChecksum(), reader.getCheckpointChecksum(), reader.getCheckpoint())
+                    new TranslogCheckpointSnapshot(
+                        readerPrimaryTerm,
+                        readerGeneration,
+                        minTranslogGeneration,
+                        translogPath,
+                        checkpointPath,
+                        reader.getTranslogChecksum(),
+                        reader.getCheckpointChecksum(),
+                        reader.getCheckpoint()
+                    )
                 );
                 if (readerGeneration > highestGeneration) {
                     highestGeneration = readerGeneration;

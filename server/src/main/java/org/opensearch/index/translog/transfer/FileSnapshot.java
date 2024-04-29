@@ -64,7 +64,7 @@ public class FileSnapshot implements Closeable {
         this.metadata = metadata;
     }
 
-    public Map<String, String> getMetadata(){
+    public Map<String, String> getMetadata() {
         return metadata;
     }
 

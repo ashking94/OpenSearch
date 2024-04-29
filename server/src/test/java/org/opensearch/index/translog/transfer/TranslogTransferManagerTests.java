@@ -25,17 +25,15 @@ import org.opensearch.core.index.Index;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.index.remote.RemoteTranslogTransferTracker;
 import org.opensearch.index.translog.Translog;
+import org.opensearch.index.translog.transfer.FileSnapshot.CheckpointFileSnapshot;
 import org.opensearch.index.translog.transfer.FileSnapshot.TransferFileSnapshot;
+import org.opensearch.index.translog.transfer.FileSnapshot.TranslogFileSnapshot;
 import org.opensearch.index.translog.transfer.listener.TranslogTransferListener;
 import org.opensearch.indices.DefaultRemoteStoreSettings;
 import org.opensearch.indices.RemoteStoreSettings;
 import org.opensearch.test.OpenSearchTestCase;
 import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
-
-import org.opensearch.index.translog.transfer.FileSnapshot.CheckpointFileSnapshot;
-import org.opensearch.index.translog.transfer.FileSnapshot.TranslogFileSnapshot;
-import org.opensearch.index.translog.transfer.TranslogCheckpointSnapshot;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
