@@ -309,6 +309,13 @@ public class IndicesService extends AbstractLifecycleComponent
     );
 
     /**
+     * If enabled, this setting adds hashed prefix before each blob's path during upload and deletion. This is used to
+     * preventing remote store throttles during node bootstrap for remote store enabled clusters.
+     */
+    public static final Setting<Boolean> CLUSTER_REMOTE_STORE_BOOTSTRAP_REPOSITORY_VERIFICATION_PREFIX_MODE_ENABLE_SETTING = Setting
+        .boolSetting("cluster.remote_store.bootstrap.repository.verification.prefix-mode.enable", true, Property.NodeScope, Property.Final);
+
+    /**
      * The node's settings.
      */
     private final Settings settings;

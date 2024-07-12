@@ -132,6 +132,11 @@ public class RemoteStorePathStrategy {
                 return self();
             }
 
+            public Builder singleInput(String input) {
+                this.indexUUID = input;
+                return self();
+            }
+
             protected T self() {
                 return (T) this;
             }

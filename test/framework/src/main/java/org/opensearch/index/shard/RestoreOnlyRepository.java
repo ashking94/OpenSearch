@@ -169,6 +169,9 @@ public abstract class RestoreOnlyRepository extends AbstractLifecycleComponent i
     public void endVerification(String verificationToken) {}
 
     @Override
+    public void endVerification(String verificationToken, boolean prefixMode) {}
+
+    @Override
     public boolean isReadOnly() {
         return false;
     }
@@ -199,6 +202,9 @@ public abstract class RestoreOnlyRepository extends AbstractLifecycleComponent i
 
     @Override
     public void verify(String verificationToken, DiscoveryNode localNode) {}
+
+    @Override
+    public void verify(String verificationToken, DiscoveryNode localNode, boolean prefixMode) {}
 
     @Override
     public void updateState(final ClusterState state) {}

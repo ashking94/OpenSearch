@@ -715,7 +715,17 @@ public class RepositoriesServiceTests extends OpenSearchTestCase {
         }
 
         @Override
+        public void endVerification(String verificationToken, boolean prefixMode) {
+
+        }
+
+        @Override
         public void verify(String verificationToken, DiscoveryNode localNode) {
+
+        }
+
+        @Override
+        public void verify(String verificationToken, DiscoveryNode localNode, boolean prefixMode) {
 
         }
 

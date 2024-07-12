@@ -163,8 +163,18 @@ public class FilterRepository implements Repository {
     }
 
     @Override
+    public void endVerification(String verificationToken, boolean prefixMode) {
+        in.endVerification(verificationToken, prefixMode);
+    }
+
+    @Override
     public void verify(String verificationToken, DiscoveryNode localNode) {
         in.verify(verificationToken, localNode);
+    }
+
+    @Override
+    public void verify(String verificationToken, DiscoveryNode localNode, boolean prefixMode) {
+        in.verify(verificationToken, localNode, prefixMode);
     }
 
     @Override

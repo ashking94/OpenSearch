@@ -109,6 +109,7 @@ import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.index.mapper.MapperService;
 import org.opensearch.index.remote.RemoteStorePathStrategy;
+import org.opensearch.index.remote.RemoteStorePathStrategy.PathInput;
 import org.opensearch.index.snapshots.IndexShardRestoreFailedException;
 import org.opensearch.index.snapshots.IndexShardSnapshotStatus;
 import org.opensearch.index.snapshots.blobstore.BlobStoreIndexShardSnapshot;
@@ -174,6 +175,8 @@ import java.util.stream.Collectors;
 import java.util.stream.LongStream;
 import java.util.stream.Stream;
 
+import static org.opensearch.index.remote.RemoteStoreEnums.PathHashAlgorithm.FNV_1A_COMPOSITE_1;
+import static org.opensearch.index.remote.RemoteStoreEnums.PathType.HASHED_PREFIX;
 import static org.opensearch.index.snapshots.blobstore.BlobStoreIndexShardSnapshot.FileInfo.canonicalName;
 import static org.opensearch.repositories.blobstore.ChecksumBlobStoreFormat.SNAPSHOT_ONLY_FORMAT_PARAMS;
 
@@ -1938,10 +1941,21 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
 
     @Override
     public void endVerification(String seed) {
+        endVerification(seed, false);
+    }
+
+    @Override
+    public void endVerification(String seed, boolean prefixMode) {
         if (isReadOnly() == false) {
             try {
                 final String testPrefix = testBlobPrefix(seed);
-                blobStore().blobContainer(basePath().add(testPrefix)).delete();
+                if (prefixMode) {
+                    PathInput pathInput = PathInput.builder().basePath(basePath()).singleInput(seed).build();
+                    BlobPath basePath = HASHED_PREFIX.path(pathInput, FNV_1A_COMPOSITE_1);
+                    blobStore().blobContainer(basePath.add(testPrefix)).delete();
+                } else {
+                    blobStore().blobContainer(basePath().add(testPrefix)).delete();
+                }
             } catch (Exception exp) {
                 throw new RepositoryVerificationException(metadata.name(), "cannot delete test data at " + basePath(), exp);
             }
@@ -3252,6 +3266,11 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
 
     @Override
     public void verify(String seed, DiscoveryNode localNode) {
+        verify(seed, localNode, false);
+    }
+
+    @Override
+    public void verify(String seed, DiscoveryNode localNode, boolean prefixMode) {
         if (isSystemRepository == false) {
             assertSnapshotOrGenericThread();
         }
@@ -3266,7 +3285,14 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                 );
             }
         } else {
-            BlobContainer testBlobContainer = blobStore().blobContainer(basePath().add(testBlobPrefix(seed)));
+            BlobContainer testBlobContainer;
+            if (prefixMode) {
+                PathInput pathInput = PathInput.builder().basePath(basePath()).singleInput(seed).build();
+                testBlobContainer = blobStore().blobContainer(HASHED_PREFIX.path(pathInput, FNV_1A_COMPOSITE_1).add(testBlobPrefix(seed)));
+            } else {
+                testBlobContainer = blobStore().blobContainer(basePath().add(testBlobPrefix(seed)));
+            }
+
             try {
                 BytesArray bytes = new BytesArray(seed);
                 try (InputStream stream = bytes.streamInput()) {

@@ -134,7 +134,7 @@ public class RemoteStoreNodeService {
      * If the creation or verification fails this will close all the repositories this method created and throw
      * exception.
      */
-    public void createAndVerifyRepositories(DiscoveryNode localNode) {
+    public void createAndVerifyRepositories(DiscoveryNode localNode, boolean prefixModeVerification) {
         RemoteStoreNodeAttribute nodeAttribute = new RemoteStoreNodeAttribute(localNode);
         RepositoriesService reposService = repositoriesService.get();
         Map<String, Repository> repositories = new HashMap<>();
@@ -153,8 +153,8 @@ public class RemoteStoreNodeService {
 
             // Verify Repository
             String verificationToken = repository.startVerification();
-            repository.verify(verificationToken, localNode);
-            repository.endVerification(verificationToken);
+            repository.verify(verificationToken, localNode, prefixModeVerification);
+            repository.endVerification(verificationToken, prefixModeVerification);
             logger.info(() -> new ParameterizedMessage("successfully verified [{}] repository", repositoryName));
             repositories.put(repositoryName, repository);
         }

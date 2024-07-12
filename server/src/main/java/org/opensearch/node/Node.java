@@ -1991,7 +1991,9 @@ public class Node implements Closeable {
             );
 
             if (isRemoteStoreAttributePresent(settings)) {
-                remoteStoreNodeService.createAndVerifyRepositories(discoveryNode);
+                boolean prefixModeVerification =
+                    IndicesService.CLUSTER_REMOTE_STORE_BOOTSTRAP_REPOSITORY_VERIFICATION_PREFIX_MODE_ENABLE_SETTING.get(settings);
+                remoteStoreNodeService.createAndVerifyRepositories(discoveryNode, prefixModeVerification);
             }
 
             localNode.set(discoveryNode);
