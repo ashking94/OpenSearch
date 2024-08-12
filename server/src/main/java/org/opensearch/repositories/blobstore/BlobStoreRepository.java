@@ -50,6 +50,7 @@ import org.opensearch.Version;
 import org.opensearch.action.ActionRunnable;
 import org.opensearch.action.StepListener;
 import org.opensearch.action.support.GroupedActionListener;
+import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.ClusterStateUpdateTask;
 import org.opensearch.cluster.RepositoryCleanupInProgress;
@@ -67,6 +68,7 @@ import org.opensearch.common.Nullable;
 import org.opensearch.common.Numbers;
 import org.opensearch.common.SetOnce;
 import org.opensearch.common.UUIDs;
+import org.opensearch.common.blobstore.AsyncMultiStreamBlobContainer;
 import org.opensearch.common.blobstore.BlobContainer;
 import org.opensearch.common.blobstore.BlobMetadata;
 import org.opensearch.common.blobstore.BlobPath;
@@ -164,6 +166,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -1754,8 +1757,17 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                             }
                         }
                     }
+
                     // Deleting the index folder
-                    deleteResult = indexEntry.getValue().delete();
+                    BlobContainer staleIndexBlobContainer = indexEntry.getValue();
+                    if (staleIndexBlobContainer instanceof AsyncMultiStreamBlobContainer) {
+                        // Use deleteAsync and wait for the result
+                        PlainActionFuture<DeleteResult> future = new PlainActionFuture<>();
+                        ((AsyncMultiStreamBlobContainer) staleIndexBlobContainer).deleteAsync(future);
+                        deleteResult = future.get();
+                    } else {
+                        deleteResult = staleIndexBlobContainer.delete();
+                    }
                     logger.debug("[{}] Cleaned up stale index [{}]", metadata.name(), indexSnId);
                 } catch (IOException e) {
                     logger.warn(
@@ -1998,9 +2010,16 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
         }
     }
 
-    private void deleteFromContainer(BlobContainer container, List<String> blobs) throws IOException {
+    private void deleteFromContainer(BlobContainer container, List<String> blobs) throws IOException, ExecutionException,
+        InterruptedException {
         logger.trace(() -> new ParameterizedMessage("[{}] Deleting {} from [{}]", metadata.name(), blobs, container.path()));
-        container.deleteBlobsIgnoringIfNotExists(blobs);
+        if (container instanceof AsyncMultiStreamBlobContainer == false) {
+            container.deleteBlobsIgnoringIfNotExists(blobs);
+            return;
+        }
+        PlainActionFuture<Void> future = new PlainActionFuture<>();
+        ((AsyncMultiStreamBlobContainer) container).deleteBlobsAsyncIgnoringIfNotExists(blobs, future);
+        future.get();
     }
 
     private BlobPath indicesPath() {
@@ -3118,7 +3137,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
                     }
                     try {
                         deleteFromContainer(shardContainer, blobsToDelete);
-                    } catch (IOException e) {
+                    } catch (IOException | ExecutionException | InterruptedException e) {
                         logger.warn(
                             () -> new ParameterizedMessage(
                                 "[{}][{}] failed to delete old index-N blobs during finalization",
