@@ -1181,7 +1181,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
             );
 
             // Start as many workers as fit into the snapshot pool at once at the most
-            final int workers = Math.min(threadPool.info(ThreadPool.Names.SNAPSHOT).getMax(), staleFilesToDeleteInBatch.size());
+            final int workers = Math.min(threadPool.info(ThreadPool.Names.SNAPSHOT_DELETION).getMax(), staleFilesToDeleteInBatch.size());
             for (int i = 0; i < workers; ++i) {
                 executeStaleShardDelete(staleFilesToDeleteInBatch, remoteStoreLockManagerFactory, groupedListener);
             }
@@ -1282,7 +1282,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
     ) throws InterruptedException {
         List<String> filesToDelete = staleFilesToDeleteInBatch.poll(0L, TimeUnit.MILLISECONDS);
         if (filesToDelete != null) {
-            threadPool.executor(ThreadPool.Names.SNAPSHOT).execute(ActionRunnable.wrap(listener, l -> {
+            threadPool.executor(ThreadPool.Names.SNAPSHOT_DELETION).execute(ActionRunnable.wrap(listener, l -> {
                 try {
                     // filtering files for which remote store lock release and cleanup succeeded,
                     // remaining files for which it failed will be retried in next snapshot delete run.
@@ -1338,7 +1338,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
         ActionListener<Collection<ShardSnapshotMetaDeleteResult>> onAllShardsCompleted
     ) {
 
-        final Executor executor = threadPool.executor(ThreadPool.Names.SNAPSHOT);
+        final Executor executor = threadPool.executor(ThreadPool.Names.SNAPSHOT_DELETION);
         final List<IndexId> indices = oldRepositoryData.indicesToUpdateAfterRemovingSnapshot(snapshotIds);
 
         if (indices.isEmpty()) {
@@ -1520,7 +1520,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
             listener.onResponse(deleteResult);
         }, listener::onFailure), 2);
 
-        final Executor executor = threadPool.executor(ThreadPool.Names.SNAPSHOT);
+        final Executor executor = threadPool.executor(ThreadPool.Names.SNAPSHOT_DELETION);
         final List<String> staleRootBlobs = staleRootBlobs(newRepoData, rootBlobs.keySet());
         if (staleRootBlobs.isEmpty()) {
             groupedListener.onResponse(DeleteResult.ZERO);
@@ -1702,7 +1702,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
 
             // Start as many workers as fit into the snapshot pool at once at the most
             final int workers = Math.min(
-                threadPool.info(ThreadPool.Names.SNAPSHOT).getMax(),
+                threadPool.info(ThreadPool.Names.SNAPSHOT_DELETION).getMax(),
                 foundIndices.size() - survivingIndexIds.size()
             );
             for (int i = 0; i < workers; ++i) {
@@ -1734,7 +1734,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
         Map.Entry<String, BlobContainer> indexEntry = staleIndicesToDelete.poll(0L, TimeUnit.MILLISECONDS);
         if (indexEntry != null) {
             final String indexSnId = indexEntry.getKey();
-            threadPool.executor(ThreadPool.Names.SNAPSHOT).execute(ActionRunnable.supply(listener, () -> {
+            threadPool.executor(ThreadPool.Names.SNAPSHOT_DELETION).execute(ActionRunnable.supply(listener, () -> {
                 DeleteResult deleteResult = DeleteResult.ZERO;
                 try {
                     logger.debug("[{}] Found stale index [{}]. Cleaning it up", metadata.name(), indexSnId);
