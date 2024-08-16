@@ -12,6 +12,7 @@ import org.apache.lucene.index.CorruptIndexException;
 import org.opensearch.common.StreamContext;
 import org.opensearch.common.blobstore.AsyncMultiStreamBlobContainer;
 import org.opensearch.common.blobstore.BlobPath;
+import org.opensearch.common.blobstore.DeleteResult;
 import org.opensearch.common.blobstore.fs.FsBlobContainer;
 import org.opensearch.common.blobstore.fs.FsBlobStore;
 import org.opensearch.common.blobstore.stream.read.ReadContext;
@@ -137,6 +138,17 @@ public class MockFsAsyncBlobContainer extends FsBlobContainer implements AsyncMu
                 listener.onFailure(e);
             }
         }).start();
+    }
+
+    @Override
+    public void deleteAsync(ActionListener<DeleteResult> completionListener) {
+        throw new UnsupportedOperationException("deleteAsync");
+    }
+
+    @Override
+    public void deleteBlobsAsyncIgnoringIfNotExists(List<String> blobNames, ActionListener<Void> completionListener) {
+        throw new UnsupportedOperationException("deleteBlobsAsyncIgnoringIfNotExists");
+
     }
 
     public boolean remoteIntegrityCheckSupported() {
