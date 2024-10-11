@@ -2806,6 +2806,20 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
         return blobStore().blobContainer(shardPath(indexId, shardId));
     }
 
+    /**
+     * Generates the blob path for a specific shard in the repository.
+     *
+     * <p>This method constructs the path based on the shard's index ID and shard number,
+     * taking into account the configured path type (fixed or hashed) and any custom prefix.
+     * For hashed paths, it uses a hash algorithm to distribute shards across the blob store.</p>
+     *
+     * <p>The method also handles a special case where the base path ends with a separator,
+     * ensuring that the resulting path is correctly formatted.</p>
+     *
+     * @param indexId The ID of the index containing the shard
+     * @param shardId The ID of the shard
+     * @return A BlobPath object representing the full path to the shard in the blob store
+     */
     private BlobPath shardPath(IndexId indexId, int shardId) {
         PathType pathType = PathType.fromCode(indexId.getShardPathType());
         SnapshotShardPathInput shardPathInput = new SnapshotShardPathInput.Builder().basePath(basePath())
@@ -2814,7 +2828,19 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
             .fixedPrefix(snapshotShardPathPrefix)
             .build();
         PathHashAlgorithm pathHashAlgorithm = pathType != PathType.FIXED ? FNV_1A_COMPOSITE_1 : null;
-        return pathType.path(shardPathInput, pathHashAlgorithm);
+        BlobPath shardPath = pathType.path(shardPathInput, pathHashAlgorithm);
+
+        // Handle the special case where the base path ends with a separator
+        String[] pathComponents = shardPath.toArray();
+        if (pathComponents.length > 3) {
+            String basePath = pathComponents[pathComponents.length - 4];
+            if (basePath.endsWith(BlobPath.SEPARATOR)) {
+                pathComponents[pathComponents.length - 4] = basePath.substring(0, basePath.length() - 1);
+                return new BlobPath().add(Arrays.asList(pathComponents));
+            }
+        }
+
+        return shardPath;
     }
 
     /**
