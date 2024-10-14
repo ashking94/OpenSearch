@@ -2810,15 +2810,25 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
      * Generates the blob path for a specific shard in the repository.
      *
      * <p>This method constructs the path based on the shard's index ID and shard number,
-     * taking into account the configured path type (fixed or hashed) and any custom prefix.
-     * For hashed paths, it uses a hash algorithm to distribute shards across the blob store.</p>
+     * taking into account the configured path type (FIXED, HASHED_PREFIX, or HASHED_INFIX)
+     * and any custom prefix. For hashed paths, it uses the FNV_1A_COMPOSITE_1 algorithm
+     * to distribute shards across the blob store.</p>
      *
-     * <p>The method also handles a special case where the base path ends with a separator,
-     * ensuring that the resulting path is correctly formatted.</p>
+     * <p>The method handles a special case where the base path ends with a separator,
+     * removing the trailing separator to ensure consistent path formatting.</p>
+     *
+     * <p>The resulting path structure depends on the path type:
+     * <ul>
+     *   <li>FIXED: [base_path, indices, index_id, shard_id]</li>
+     *   <li>HASHED_PREFIX: [hash, base_path, indices, index_id, shard_id]</li>
+     *   <li>HASHED_INFIX: [base_path, hash, indices, index_id, shard_id]</li>
+     * </ul>
+     * </p>
      *
      * @param indexId The ID of the index containing the shard
      * @param shardId The ID of the shard
      * @return A BlobPath object representing the full path to the shard in the blob store
+     * @throws IllegalArgumentException if an unknown path type is encountered
      */
     private BlobPath shardPath(IndexId indexId, int shardId) {
         PathType pathType = PathType.fromCode(indexId.getShardPathType());
@@ -2827,20 +2837,50 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
             .shardId(String.valueOf(shardId))
             .fixedPrefix(snapshotShardPathPrefix)
             .build();
-        PathHashAlgorithm pathHashAlgorithm = pathType != PathType.FIXED ? FNV_1A_COMPOSITE_1 : null;
+        PathHashAlgorithm pathHashAlgorithm = (pathType != PathType.FIXED) ? FNV_1A_COMPOSITE_1 : null;
         BlobPath shardPath = pathType.path(shardPathInput, pathHashAlgorithm);
 
-        // Handle the special case where the base path ends with a separator
         String[] pathComponents = shardPath.toArray();
-        if (pathComponents.length > 3) {
-            String basePath = pathComponents[pathComponents.length - 4];
-            if (basePath.endsWith(BlobPath.SEPARATOR)) {
-                pathComponents[pathComponents.length - 4] = basePath.substring(0, basePath.length() - 1);
-                return new BlobPath().add(Arrays.asList(pathComponents));
-            }
-        }
+        int basePathIndex = getBasePathIndex(pathType, pathComponents);
 
+        String basePath = pathComponents[basePathIndex];
+        if (basePath.endsWith(BlobPath.SEPARATOR)) {
+            pathComponents[basePathIndex] = basePath.substring(0, basePath.length() - 1);
+            return new BlobPath().add(Arrays.asList(pathComponents));
+        }
         return shardPath;
+    }
+
+    /**
+     * Determines the index of the base path component based on the path type.
+     *
+     * <p>This method is used to locate the base path component within the
+     * array of path components, which varies depending on the path type:</p>
+     * <ul>
+     *   <li>FIXED: base path is at index 0</li>
+     *   <li>HASHED_PREFIX: base path is at index 1 (after the hash)</li>
+     *   <li>HASHED_INFIX: base path is at index 0 (before the hash)</li>
+     * </ul>
+     *
+     * @param pathType The type of path (FIXED, HASHED_PREFIX, or HASHED_INFIX)
+     * @param pathComponents The array of path components
+     * @return The index of the base path component
+     * @throws IllegalArgumentException if an unknown path type is encountered
+     */
+    private int getBasePathIndex(PathType pathType, String[] pathComponents) {
+        switch (pathType) {
+            case FIXED:
+                assert pathComponents.length == 4;
+                return 0;
+            case HASHED_PREFIX:
+                assert pathComponents.length == 5;
+                return 1;
+            case HASHED_INFIX:
+                assert pathComponents.length == 5;
+                return 0;
+            default:
+                throw new IllegalArgumentException("Unknown path type [" + pathType + "]");
+        }
     }
 
     /**
