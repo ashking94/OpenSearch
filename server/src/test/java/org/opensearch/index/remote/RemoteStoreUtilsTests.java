@@ -24,6 +24,7 @@ import org.opensearch.cluster.routing.ShardRoutingState;
 import org.opensearch.cluster.routing.TestShardRouting;
 import org.opensearch.common.UUIDs;
 import org.opensearch.common.blobstore.BlobMetadata;
+import org.opensearch.common.blobstore.BlobPath;
 import org.opensearch.common.blobstore.support.PlainBlobMetadata;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.settings.ClusterSettings;
@@ -36,6 +37,8 @@ import org.opensearch.index.translog.transfer.TranslogTransferMetadata;
 import org.opensearch.indices.RemoteStoreSettings;
 import org.opensearch.indices.replication.common.ReplicationType;
 import org.opensearch.node.remotestore.RemoteStoreNodeAttribute;
+import org.opensearch.repositories.IndexId;
+import org.opensearch.repositories.blobstore.BlobStoreRepository;
 import org.opensearch.test.OpenSearchTestCase;
 
 import java.math.BigInteger;
@@ -47,6 +50,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -1180,4 +1184,43 @@ public class RemoteStoreUtilsTests extends OpenSearchTestCase {
         assertEquals(0, implicitLockedFiles.size());
         assertEquals(0, metadataFilePinnedTimestampCache.size());
     }
+
+    public void testGetShardPath() {
+        for (int i = 0; i < 1000000; i++) {
+            String path = generateRandomString();
+            // if (path.equals("/")) {
+            // continue;
+            // }
+            BlobPath basePath = BlobPath.cleanPath().add(path);
+            IndexId indexId = new IndexId("", "xyz", RemoteStoreEnums.PathType.FIXED.getCode());
+            BlobPath path1 = RemoteStoreUtils.getShardPath(basePath, indexId.getId(), "1", false);
+            BlobPath path2 = BlobStoreRepository.getShardPath(indexId, 1, basePath);
+            logger.info("{} equal is {}", path, path1.buildAsString().equals(path2.buildAsString()));
+            assertEquals(path1.buildAsString(), path2.buildAsString());
+        }
+    }
+
+    public static String generateRandomString() {
+        // Characters to be used in random string
+        String allowedChars = "abcdefghijklmnopqrstuvwxyz//////////////////////";
+
+        // Create Random object
+        Random random = new Random();
+
+        // Generate random length (less than 1024)
+        int length = random.nextInt(100);
+
+        // StringBuilder to store the random string
+        StringBuilder sb = new StringBuilder(length);
+
+        // Generate random string
+        for (int i = 0; i < length; i++) {
+            // Get random index from allowedChars
+            int randomIndex = random.nextInt(allowedChars.length());
+            // Append random character to StringBuilder
+            sb.append(allowedChars.charAt(randomIndex));
+        }
+        return sb.toString();
+    }
+
 }

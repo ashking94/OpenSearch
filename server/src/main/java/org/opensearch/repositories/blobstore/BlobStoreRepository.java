@@ -2826,7 +2826,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
      * @return A BlobPath object representing the full path to the shard in the blob store
      * @throws IllegalArgumentException if the base path has more than one component
      */
-    private BlobPath shardPath(IndexId indexId, int shardId) {
+    public BlobPath shardPath(IndexId indexId, int shardId) {
         PathType pathType = PathType.fromCode(indexId.getShardPathType());
         BlobPath normalizedBasePath = normalizeBasePath(basePath());
 
@@ -2834,6 +2834,19 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
             .indexUUID(indexId.getId())
             .shardId(String.valueOf(shardId))
             .fixedPrefix(snapshotShardPathPrefix)
+            .build();
+
+        PathHashAlgorithm pathHashAlgorithm = (pathType != PathType.FIXED) ? FNV_1A_COMPOSITE_1 : null;
+        return pathType.path(shardPathInput, pathHashAlgorithm);
+    }
+
+    public static BlobPath getShardPath(IndexId indexId, int shardId, BlobPath basePath) {
+        PathType pathType = PathType.fromCode(indexId.getShardPathType());
+        BlobPath normalizedBasePath = normalizeBasePath(basePath);
+
+        SnapshotShardPathInput shardPathInput = new SnapshotShardPathInput.Builder().basePath(normalizedBasePath)
+            .indexUUID(indexId.getId())
+            .shardId(String.valueOf(shardId))
             .build();
 
         PathHashAlgorithm pathHashAlgorithm = (pathType != PathType.FIXED) ? FNV_1A_COMPOSITE_1 : null;
@@ -2856,7 +2869,7 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
      * @return A normalized BlobPath
      * @throws IllegalArgumentException if the base path has more than one component
      */
-    private BlobPath normalizeBasePath(BlobPath originalBasePath) {
+    private static BlobPath normalizeBasePath(BlobPath originalBasePath) {
         String[] basePathComponents = originalBasePath.toArray();
         if (basePathComponents.length > 1) {
             throw new IllegalArgumentException("Base path can have maximum 1 component as BlobPath");
@@ -2867,11 +2880,15 @@ public abstract class BlobStoreRepository extends AbstractLifecycleComponent imp
         }
 
         String basePathStr = basePathComponents[0];
+        if (basePathStr.isEmpty()) {
+            return BlobPath.cleanPath();
+        }
+
         if (basePathStr.endsWith(BlobPath.SEPARATOR)) {
             basePathStr = basePathStr.substring(0, basePathStr.length() - 1);
         }
 
-        return basePathStr.isEmpty() ? BlobPath.cleanPath() : BlobPath.cleanPath().add(basePathStr);
+        return BlobPath.cleanPath().add(basePathStr);
     }
 
     /**

@@ -18,6 +18,7 @@ import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
 import org.opensearch.cluster.routing.RoutingTable;
+import org.opensearch.common.blobstore.BlobPath;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.indices.RemoteStoreSettings;
@@ -579,5 +580,24 @@ public class RemoteStoreUtils {
             .getPinnedTimestampsLookbackInterval()
             .millis();
         return lastSuccessfulFetchTimestamp < (System.currentTimeMillis() - staleBufferInMillis);
+    }
+
+    public static BlobPath getShardPath(
+        final BlobPath basePath,
+        final String indexId,
+        final String shardId,
+        final boolean useTopLevelIndexLevelPath
+    ) {
+        return getIndexPath(basePath, indexId, useTopLevelIndexLevelPath).add(shardId);
+    }
+
+    public static BlobPath getIndexPath(final BlobPath basePath, final String indexId, final boolean useTopLevelIndexPath) {
+        return new BlobPath().add(getIndexPathAsString(basePath.buildAsString(), indexId, useTopLevelIndexPath));
+    }
+
+    public static String getIndexPathAsString(final String basePath, final String indexId, final boolean useTopLevelIndexPath) {
+        String indexPath = basePath;
+        indexPath += "indices" + BlobPath.SEPARATOR + indexId;
+        return indexPath;
     }
 }
