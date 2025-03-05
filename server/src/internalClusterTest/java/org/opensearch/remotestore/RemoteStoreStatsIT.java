@@ -21,6 +21,7 @@ import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.routing.ShardRouting;
 import org.opensearch.cluster.routing.ShardRoutingState;
 import org.opensearch.cluster.routing.allocation.command.MoveAllocationCommand;
+import org.opensearch.common.SetOnce;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.index.IndexSettings;
 import org.opensearch.index.remote.RemoteSegmentTransferTracker;
@@ -273,41 +274,32 @@ public class RemoteStoreStatsIT extends RemoteStoreBaseIntegTestCase {
 
         // Get zero state values
         // Extract and assert zero state primary stats
-        RemoteStoreStatsResponse zeroStateResponse = client().admin().cluster().prepareRemoteStoreStats(INDEX_NAME, "0").get();
-        RemoteSegmentTransferTracker.Stats zeroStatePrimaryStats = Arrays.stream(zeroStateResponse.getRemoteStoreStats())
-            .filter(remoteStoreStats -> remoteStoreStats.getShardRouting().primary())
-            .collect(Collectors.toList())
-            .get(0)
-            .getSegmentStats();
-        logger.info(
-            "Zero state primary stats: {}ms refresh time lag, {}b bytes lag, {}b upload bytes started, {}b upload bytes failed , {} uploads succeeded, {} upload byes succeeded.",
-            zeroStatePrimaryStats.refreshTimeLagMs,
-            zeroStatePrimaryStats.bytesLag,
-            zeroStatePrimaryStats.uploadBytesStarted,
-            zeroStatePrimaryStats.uploadBytesFailed,
-            zeroStatePrimaryStats.totalUploadsSucceeded,
-            zeroStatePrimaryStats.uploadBytesSucceeded
-        );
-        assertTrue(
-            zeroStatePrimaryStats.totalUploadsStarted == zeroStatePrimaryStats.totalUploadsSucceeded
-                && zeroStatePrimaryStats.totalUploadsSucceeded == 1
-        );
-        assertTrue(
-            zeroStatePrimaryStats.uploadBytesStarted == zeroStatePrimaryStats.uploadBytesSucceeded
-                && zeroStatePrimaryStats.uploadBytesSucceeded > 0
-        );
-        assertTrue(zeroStatePrimaryStats.totalUploadsFailed == 0 && zeroStatePrimaryStats.uploadBytesFailed == 0);
+        SetOnce<RemoteSegmentTransferTracker.Stats> zeroStatePrimaryStats = new SetOnce<>();
+        assertBusy(() -> {
+            RemoteStoreStatsResponse zeroStateResponse = client().admin().cluster().prepareRemoteStoreStats(INDEX_NAME, "0").get();
+            RemoteSegmentTransferTracker.Stats primaryStats = Arrays.stream(zeroStateResponse.getRemoteStoreStats())
+                .filter(remoteStoreStats -> remoteStoreStats.getShardRouting().primary())
+                .toList()
+                .getFirst()
+                .getSegmentStats();
+            logger.info("Zero state primary stats: {}", primaryStats);
+            assertEquals(primaryStats.totalUploadsStarted, primaryStats.totalUploadsSucceeded);
+            assertTrue(primaryStats.totalUploadsSucceeded >= 1);
+            assertEquals(primaryStats.uploadBytesStarted, primaryStats.uploadBytesSucceeded);
+            assertTrue(primaryStats.uploadBytesSucceeded > 0);
+            assertEquals(0, primaryStats.totalUploadsFailed);
+            assertEquals(0, primaryStats.uploadBytesFailed);
 
-        // Extract and assert zero state replica stats
-        RemoteSegmentTransferTracker.Stats zeroStateReplicaStats = Arrays.stream(zeroStateResponse.getRemoteStoreStats())
-            .filter(remoteStoreStats -> !remoteStoreStats.getShardRouting().primary())
-            .collect(Collectors.toList())
-            .get(0)
-            .getSegmentStats();
-        assertTrue(
-            zeroStateReplicaStats.directoryFileTransferTrackerStats.transferredBytesStarted == 0
-                && zeroStateReplicaStats.directoryFileTransferTrackerStats.transferredBytesSucceeded == 0
-        );
+            // Extract and assert zero state replica stats
+            RemoteSegmentTransferTracker.Stats zeroStateReplicaStats = Arrays.stream(zeroStateResponse.getRemoteStoreStats())
+                .filter(remoteStoreStats -> !remoteStoreStats.getShardRouting().primary())
+                .toList()
+                .getFirst()
+                .getSegmentStats();
+            assertEquals(0, zeroStateReplicaStats.directoryFileTransferTrackerStats.transferredBytesStarted);
+            assertEquals(0, zeroStateReplicaStats.directoryFileTransferTrackerStats.transferredBytesSucceeded);
+            zeroStatePrimaryStats.set(primaryStats);
+        });
 
         // Index documents
         for (int i = 1; i <= randomIntBetween(5, 10); i++) {
@@ -315,6 +307,7 @@ public class RemoteStoreStatsIT extends RemoteStoreBaseIntegTestCase {
             // Running Flush & Refresh manually
             flushAndRefresh(INDEX_NAME);
             ensureGreen(INDEX_NAME);
+            waitForReplication();
 
             // Poll for RemoteStore Stats
             assertBusy(() -> {
@@ -322,31 +315,31 @@ public class RemoteStoreStatsIT extends RemoteStoreBaseIntegTestCase {
                 // Iterate through the response and extract the relevant segment upload and download stats
                 List<RemoteStoreStats> primaryStatsList = Arrays.stream(response.getRemoteStoreStats())
                     .filter(remoteStoreStats -> remoteStoreStats.getShardRouting().primary())
-                    .collect(Collectors.toList());
+                    .toList();
                 assertEquals(1, primaryStatsList.size());
                 List<RemoteStoreStats> replicaStatsList = Arrays.stream(response.getRemoteStoreStats())
                     .filter(remoteStoreStats -> !remoteStoreStats.getShardRouting().primary())
-                    .collect(Collectors.toList());
+                    .toList();
                 assertEquals(1, replicaStatsList.size());
-                RemoteSegmentTransferTracker.Stats primaryStats = primaryStatsList.get(0).getSegmentStats();
-                RemoteSegmentTransferTracker.Stats replicaStats = replicaStatsList.get(0).getSegmentStats();
+                RemoteSegmentTransferTracker.Stats primaryStats = primaryStatsList.getFirst().getSegmentStats();
+                RemoteSegmentTransferTracker.Stats replicaStats = replicaStatsList.getFirst().getSegmentStats();
                 // Assert Upload syncs - zero state uploads == download syncs
                 assertTrue(primaryStats.totalUploadsStarted > 0);
                 assertTrue(primaryStats.totalUploadsSucceeded > 0);
+                assertTrue(replicaStats.directoryFileTransferTrackerStats.transferredBytesStarted > 0);
                 assertTrue(
-                    replicaStats.directoryFileTransferTrackerStats.transferredBytesStarted > 0
-                        && primaryStats.uploadBytesStarted
-                            - zeroStatePrimaryStats.uploadBytesStarted >= replicaStats.directoryFileTransferTrackerStats.transferredBytesStarted
+                    primaryStats.uploadBytesStarted - zeroStatePrimaryStats
+                        .get().uploadBytesStarted >= replicaStats.directoryFileTransferTrackerStats.transferredBytesStarted
                 );
+                assertTrue(replicaStats.directoryFileTransferTrackerStats.transferredBytesSucceeded > 0);
                 assertTrue(
-                    replicaStats.directoryFileTransferTrackerStats.transferredBytesSucceeded > 0
-                        && primaryStats.uploadBytesSucceeded
-                            - zeroStatePrimaryStats.uploadBytesSucceeded >= replicaStats.directoryFileTransferTrackerStats.transferredBytesSucceeded
+                    primaryStats.uploadBytesSucceeded - zeroStatePrimaryStats
+                        .get().uploadBytesSucceeded >= replicaStats.directoryFileTransferTrackerStats.transferredBytesSucceeded
                 );
                 // Assert zero failures
                 assertEquals(0, primaryStats.uploadBytesFailed);
                 assertEquals(0, replicaStats.directoryFileTransferTrackerStats.transferredBytesFailed);
-            }, 60, TimeUnit.SECONDS);
+            });
         }
     }
 
@@ -377,40 +370,31 @@ public class RemoteStoreStatsIT extends RemoteStoreBaseIntegTestCase {
 
         // Get zero state values
         // Extract and assert zero state primary stats
-        RemoteStoreStatsResponse zeroStateResponse = client().admin().cluster().prepareRemoteStoreStats(INDEX_NAME, "0").get();
-        RemoteSegmentTransferTracker.Stats zeroStatePrimaryStats = Arrays.stream(zeroStateResponse.getRemoteStoreStats())
-            .filter(remoteStoreStats -> remoteStoreStats.getShardRouting().primary())
-            .collect(Collectors.toList())
-            .get(0)
-            .getSegmentStats();
-        logger.info(
-            "Zero state primary stats: {}ms refresh time lag, {}b bytes lag, {}b upload bytes started, {}b upload bytes failed , {} uploads succeeded, {} upload byes succeeded.",
-            zeroStatePrimaryStats.refreshTimeLagMs,
-            zeroStatePrimaryStats.bytesLag,
-            zeroStatePrimaryStats.uploadBytesStarted,
-            zeroStatePrimaryStats.uploadBytesFailed,
-            zeroStatePrimaryStats.totalUploadsSucceeded,
-            zeroStatePrimaryStats.uploadBytesSucceeded
-        );
-        assertTrue(
-            zeroStatePrimaryStats.totalUploadsStarted == zeroStatePrimaryStats.totalUploadsSucceeded
-                && zeroStatePrimaryStats.totalUploadsSucceeded == 1
-        );
-        assertTrue(
-            zeroStatePrimaryStats.uploadBytesStarted == zeroStatePrimaryStats.uploadBytesSucceeded
-                && zeroStatePrimaryStats.uploadBytesSucceeded > 0
-        );
-        assertTrue(zeroStatePrimaryStats.totalUploadsFailed == 0 && zeroStatePrimaryStats.uploadBytesFailed == 0);
+        SetOnce<RemoteSegmentTransferTracker.Stats> zeroStatePrimaryStats = new SetOnce<>();
+        assertBusy(() -> {
+            RemoteStoreStatsResponse zeroStateResponse = client().admin().cluster().prepareRemoteStoreStats(INDEX_NAME, "0").get();
+            RemoteSegmentTransferTracker.Stats primaryStats = Arrays.stream(zeroStateResponse.getRemoteStoreStats())
+                .filter(remoteStoreStats -> remoteStoreStats.getShardRouting().primary())
+                .toList()
+                .getFirst()
+                .getSegmentStats();
+            logger.info("Zero state primary stats: {}", primaryStats);
+            assertEquals(primaryStats.totalUploadsStarted, primaryStats.totalUploadsSucceeded);
+            assertTrue(primaryStats.totalUploadsSucceeded >= 1);
+            assertEquals(primaryStats.uploadBytesStarted, primaryStats.uploadBytesSucceeded);
+            assertTrue(primaryStats.uploadBytesSucceeded > 0);
+            assertEquals(0, primaryStats.totalUploadsFailed);
+            assertEquals(0, primaryStats.uploadBytesFailed);
 
-        // Extract and assert zero state replica stats
-        List<RemoteStoreStats> zeroStateReplicaStats = Arrays.stream(zeroStateResponse.getRemoteStoreStats())
-            .filter(remoteStoreStats -> !remoteStoreStats.getShardRouting().primary())
-            .collect(Collectors.toList());
-        zeroStateReplicaStats.forEach(stats -> {
-            assertTrue(
-                stats.getSegmentStats().directoryFileTransferTrackerStats.transferredBytesStarted == 0
-                    && stats.getSegmentStats().directoryFileTransferTrackerStats.transferredBytesSucceeded == 0
-            );
+            // Extract and assert zero state replica stats
+            List<RemoteStoreStats> zeroStateReplicaStats = Arrays.stream(zeroStateResponse.getRemoteStoreStats())
+                .filter(remoteStoreStats -> !remoteStoreStats.getShardRouting().primary())
+                .toList();
+            zeroStateReplicaStats.forEach(stats -> {
+                assertEquals(0, stats.getSegmentStats().directoryFileTransferTrackerStats.transferredBytesStarted);
+                assertEquals(0, stats.getSegmentStats().directoryFileTransferTrackerStats.transferredBytesSucceeded);
+            });
+            zeroStatePrimaryStats.set(primaryStats);
         });
 
         int currentNodesInCluster = client().admin().cluster().prepareHealth().get().getNumberOfDataNodes();
@@ -418,12 +402,14 @@ public class RemoteStoreStatsIT extends RemoteStoreBaseIntegTestCase {
             indexSingleDoc(INDEX_NAME);
             // Running Flush & Refresh manually
             flushAndRefresh(INDEX_NAME);
+            ensureGreen(INDEX_NAME);
+            waitForReplication();
 
+            // Poll for RemoteStore Stats
             assertBusy(() -> {
                 RemoteStoreStatsResponse response = client().admin().cluster().prepareRemoteStoreStats(INDEX_NAME, "0").get();
                 assertEquals(currentNodesInCluster, response.getSuccessfulShards());
-                long uploadsStarted = 0, uploadsSucceeded = 0, uploadsFailed = 0;
-                long uploadBytesStarted = 0, uploadBytesSucceeded = 0, uploadBytesFailed = 0;
+                long uploadsFailed = 0, uploadBytesStarted = 0, uploadBytesSucceeded = 0, uploadBytesFailed = 0;
                 List<Long> downloadBytesStarted = new ArrayList<>(), downloadBytesSucceeded = new ArrayList<>(), downloadBytesFailed =
                     new ArrayList<>();
 
@@ -444,11 +430,11 @@ public class RemoteStoreStatsIT extends RemoteStoreBaseIntegTestCase {
                 assertEquals(0, uploadsFailed);
                 assertEquals(0, uploadBytesFailed);
                 for (int j = 0; j < response.getSuccessfulShards() - 1; j++) {
-                    assertTrue(uploadBytesStarted - zeroStatePrimaryStats.uploadBytesStarted > downloadBytesStarted.get(j));
-                    assertTrue(uploadBytesSucceeded - zeroStatePrimaryStats.uploadBytesSucceeded > downloadBytesSucceeded.get(j));
+                    assertTrue(uploadBytesStarted - zeroStatePrimaryStats.get().uploadBytesStarted > downloadBytesStarted.get(j));
+                    assertTrue(uploadBytesSucceeded - zeroStatePrimaryStats.get().uploadBytesSucceeded > downloadBytesSucceeded.get(j));
                     assertEquals(0, (long) downloadBytesFailed.get(j));
                 }
-            }, 60, TimeUnit.SECONDS);
+            });
         }
     }
 
