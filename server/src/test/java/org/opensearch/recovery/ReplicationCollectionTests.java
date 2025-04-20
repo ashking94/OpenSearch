@@ -54,6 +54,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.lessThan;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 
 public class ReplicationCollectionTests extends OpenSearchIndexLevelReplicationTestCase {
@@ -122,13 +123,15 @@ public class ReplicationCollectionTests extends OpenSearchIndexLevelReplicationT
                 shard,
                 shards.getPrimary().getLatestReplicationCheckpoint(),
                 mock(SegmentReplicationSource.class),
-                mock(ReplicationListener.class)
+                mock(ReplicationListener.class),
+                anyBoolean()
             );
             final SegmentReplicationTarget target2 = new SegmentReplicationTarget(
                 shard,
                 shards.getPrimary().getLatestReplicationCheckpoint(),
                 mock(SegmentReplicationSource.class),
-                mock(ReplicationListener.class)
+                mock(ReplicationListener.class),
+                anyBoolean()
             );
             collection.startSafe(target1, TimeValue.timeValueMinutes(30));
             assertThrows(ReplicationFailedException.class, () -> collection.startSafe(target2, TimeValue.timeValueMinutes(30)));

@@ -27,6 +27,7 @@ import org.apache.lucene.util.Version;
 import org.opensearch.ExceptionsHelper;
 import org.opensearch.OpenSearchCorruptionException;
 import org.opensearch.cluster.metadata.IndexMetadata;
+import org.opensearch.common.TriConsumer;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
@@ -146,7 +147,7 @@ public class SegmentReplicationTargetTests extends IndexShardTestCase {
         SegmentReplicationTargetService.SegmentReplicationListener segRepListener = mock(
             SegmentReplicationTargetService.SegmentReplicationListener.class
         );
-        segrepTarget = new SegmentReplicationTarget(spyIndexShard, repCheckpoint, segrepSource, segRepListener);
+        segrepTarget = new SegmentReplicationTarget(spyIndexShard, repCheckpoint, segrepSource, segRepListener, false);
 
         segrepTarget.startReplication(new ActionListener<Void>() {
             @Override
@@ -177,7 +178,7 @@ public class SegmentReplicationTargetTests extends IndexShardTestCase {
                 logger.error("Unexpected onFailure", e);
                 Assert.fail();
             }
-        }, (ReplicationCheckpoint checkpoint, IndexShard indexShard) -> {
+        }, (ReplicationCheckpoint checkpoint, IndexShard indexShard, Boolean blockLevelFetch) -> {
             assertEquals(repCheckpoint, checkpoint);
             assertEquals(indexShard, spyIndexShard);
         });
@@ -211,7 +212,7 @@ public class SegmentReplicationTargetTests extends IndexShardTestCase {
         SegmentReplicationTargetService.SegmentReplicationListener segRepListener = mock(
             SegmentReplicationTargetService.SegmentReplicationListener.class
         );
-        segrepTarget = new SegmentReplicationTarget(spyIndexShard, repCheckpoint, segrepSource, segRepListener);
+        segrepTarget = new SegmentReplicationTarget(spyIndexShard, repCheckpoint, segrepSource, segRepListener, false);
 
         segrepTarget.startReplication(new ActionListener<Void>() {
             @Override
@@ -233,7 +234,7 @@ public class SegmentReplicationTargetTests extends IndexShardTestCase {
                 assertEquals(exception, e.getCause().getCause());
                 segrepTarget.fail(new ReplicationFailedException(e), false);
             }
-        }, mock(BiConsumer.class));
+        }, mock(TriConsumer.class));
     }
 
     public void testFailureResponse_getSegmentFiles() {
@@ -264,7 +265,7 @@ public class SegmentReplicationTargetTests extends IndexShardTestCase {
         SegmentReplicationTargetService.SegmentReplicationListener segRepListener = mock(
             SegmentReplicationTargetService.SegmentReplicationListener.class
         );
-        segrepTarget = new SegmentReplicationTarget(spyIndexShard, repCheckpoint, segrepSource, segRepListener);
+        segrepTarget = new SegmentReplicationTarget(spyIndexShard, repCheckpoint, segrepSource, segRepListener, false);
 
         segrepTarget.startReplication(new ActionListener<Void>() {
             @Override
@@ -286,7 +287,7 @@ public class SegmentReplicationTargetTests extends IndexShardTestCase {
                 assertEquals(exception, e.getCause().getCause());
                 segrepTarget.fail(new ReplicationFailedException(e), false);
             }
-        }, mock(BiConsumer.class));
+        }, mock(TriConsumer.class));
     }
 
     public void testFailure_finalizeReplication_NonCorruptionException() throws IOException {
@@ -317,7 +318,7 @@ public class SegmentReplicationTargetTests extends IndexShardTestCase {
         SegmentReplicationTargetService.SegmentReplicationListener segRepListener = mock(
             SegmentReplicationTargetService.SegmentReplicationListener.class
         );
-        segrepTarget = new SegmentReplicationTarget(spyIndexShard, repCheckpoint, segrepSource, segRepListener);
+        segrepTarget = new SegmentReplicationTarget(spyIndexShard, repCheckpoint, segrepSource, segRepListener, false);
 
         doThrow(exception).when(spyIndexShard).finalizeReplication(any());
 
@@ -333,7 +334,7 @@ public class SegmentReplicationTargetTests extends IndexShardTestCase {
                 assertEquals(exception, e.getCause());
                 segrepTarget.fail(new ReplicationFailedException(e), false);
             }
-        }, mock(BiConsumer.class));
+        }, mock(TriConsumer.class));
     }
 
     public void testFailure_finalizeReplication_IndexFormatException() throws IOException {
@@ -364,7 +365,7 @@ public class SegmentReplicationTargetTests extends IndexShardTestCase {
         SegmentReplicationTargetService.SegmentReplicationListener segRepListener = mock(
             SegmentReplicationTargetService.SegmentReplicationListener.class
         );
-        segrepTarget = new SegmentReplicationTarget(spyIndexShard, repCheckpoint, segrepSource, segRepListener);
+        segrepTarget = new SegmentReplicationTarget(spyIndexShard, repCheckpoint, segrepSource, segRepListener, false);
 
         doThrow(exception).when(spyIndexShard).finalizeReplication(any());
 
@@ -379,7 +380,7 @@ public class SegmentReplicationTargetTests extends IndexShardTestCase {
                 assertEquals(exception, e.getCause());
                 segrepTarget.fail(new ReplicationFailedException(e), false);
             }
-        }, mock(BiConsumer.class));
+        }, mock(TriConsumer.class));
     }
 
     public void testFailure_differentSegmentFiles() throws IOException {
@@ -409,7 +410,7 @@ public class SegmentReplicationTargetTests extends IndexShardTestCase {
         SegmentReplicationTargetService.SegmentReplicationListener segRepListener = mock(
             SegmentReplicationTargetService.SegmentReplicationListener.class
         );
-        segrepTarget = new SegmentReplicationTarget(spyIndexShard, repCheckpoint, segrepSource, segRepListener);
+        segrepTarget = new SegmentReplicationTarget(spyIndexShard, repCheckpoint, segrepSource, segRepListener, false);
         when(spyIndexShard.getSegmentMetadataMap()).thenReturn(SI_SNAPSHOT_DIFFERENT);
         segrepTarget.startReplication(new ActionListener<Void>() {
             @Override
@@ -432,7 +433,7 @@ public class SegmentReplicationTargetTests extends IndexShardTestCase {
                 assertTrue(e.getMessage().contains("has local copies of segments that differ from the primary"));
                 segrepTarget.fail(new ReplicationFailedException(e), false);
             }
-        }, mock(BiConsumer.class));
+        }, mock(TriConsumer.class));
     }
 
     /**
@@ -472,7 +473,7 @@ public class SegmentReplicationTargetTests extends IndexShardTestCase {
             SegmentReplicationTargetService.SegmentReplicationListener.class
         );
 
-        segrepTarget = new SegmentReplicationTarget(spyIndexShard, repCheckpoint, segrepSource, segRepListener);
+        segrepTarget = new SegmentReplicationTarget(spyIndexShard, repCheckpoint, segrepSource, segRepListener, false);
         when(spyIndexShard.getSegmentMetadataMap()).thenReturn(storeMetadataSnapshots.get(0).asMap());
         segrepTarget.startReplication(new ActionListener<Void>() {
             @Override
@@ -486,7 +487,7 @@ public class SegmentReplicationTargetTests extends IndexShardTestCase {
                 logger.error("Unexpected onFailure", e);
                 Assert.fail();
             }
-        }, mock(BiConsumer.class));
+        }, mock(TriConsumer.class));
     }
 
     /**

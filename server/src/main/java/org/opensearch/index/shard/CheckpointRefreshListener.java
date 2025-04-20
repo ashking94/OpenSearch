@@ -40,11 +40,8 @@ public class CheckpointRefreshListener extends ReleasableRetryableRefreshListene
 
     @Override
     protected boolean performAfterRefreshWithPermit(boolean didRefresh) {
-        if (didRefresh
-            && shard.state() == IndexShardState.STARTED
-            && shard.getReplicationTracker().isPrimaryMode()
-            && shard.indexSettings.isAssignedOnRemoteNode() == false) {
-            publisher.publish(shard, shard.getLatestReplicationCheckpoint());
+        if (didRefresh && shard.state() == IndexShardState.STARTED && shard.getReplicationTracker().isPrimaryMode()) {
+            publisher.publish(shard, shard.getLatestReplicationCheckpoint(), shard.indexSettings.isAssignedOnRemoteNode());
         }
         return true;
     }

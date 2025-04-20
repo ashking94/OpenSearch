@@ -66,6 +66,7 @@ import java.util.function.BiConsumer;
 
 import static org.opensearch.index.seqno.SequenceNumbers.NO_OPS_PERFORMED;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
@@ -197,7 +198,8 @@ public class SegmentReplicationTargetServiceTests extends IndexShardTestCase {
                     logger.error("Unexpected error", e);
                     Assert.fail("Test should succeed");
                 }
-            }
+            },
+            false
         );
         latch.await(2, TimeUnit.SECONDS);
         assertEquals(0, latch.getCount());
@@ -246,7 +248,8 @@ public class SegmentReplicationTargetServiceTests extends IndexShardTestCase {
                     assertEquals(expectedError, e.getCause());
                     latch.countDown();
                 }
-            }
+            },
+            false
         );
         sut.startReplication(target);
         latch.await(2, TimeUnit.SECONDS);
@@ -256,7 +259,7 @@ public class SegmentReplicationTargetServiceTests extends IndexShardTestCase {
     public void testAlreadyOnNewCheckpoint() {
         SegmentReplicationTargetService spy = spy(sut);
         spy.onNewCheckpoint(replicaShard.getLatestReplicationCheckpoint(), replicaShard);
-        verify(spy, times(0)).startReplication(any(), any(), any());
+        verify(spy, times(0)).startReplication(any(), any(), any(), anyBoolean());
         verify(spy, times(1)).updateVisibleCheckpoint(NO_OPS_PERFORMED, replicaShard);
     }
 
@@ -318,7 +321,8 @@ public class SegmentReplicationTargetServiceTests extends IndexShardTestCase {
                     ) {
                         Assert.fail("Replication should not fail");
                     }
-                }
+                },
+                false
             )
         );
 
@@ -349,7 +353,8 @@ public class SegmentReplicationTargetServiceTests extends IndexShardTestCase {
                         assertFalse(sendShardFailure);
                         assertEquals("Shard " + replicaShard.shardId() + " is already replicating", e.getMessage());
                     }
-                }
+                },
+                false
             )
         );
 
@@ -362,7 +367,8 @@ public class SegmentReplicationTargetServiceTests extends IndexShardTestCase {
         verify(spy, times(0)).startReplication(
             eq(replicaShard),
             eq(aheadCheckpoint),
-            any(SegmentReplicationTargetService.SegmentReplicationListener.class)
+            any(SegmentReplicationTargetService.SegmentReplicationListener.class),
+            anyBoolean()
         );
         continueGetCheckpointMetadata.countDown();
         replicationCompleteLatch.await(5, TimeUnit.MINUTES);
@@ -427,7 +433,8 @@ public class SegmentReplicationTargetServiceTests extends IndexShardTestCase {
                 replicaShard,
                 updatedCheckpoint,
                 source,
-                mock(SegmentReplicationTargetService.SegmentReplicationListener.class)
+                mock(SegmentReplicationTargetService.SegmentReplicationListener.class),
+                anyBoolean()
             )
         );
 
@@ -442,20 +449,20 @@ public class SegmentReplicationTargetServiceTests extends IndexShardTestCase {
 
         // ensure the old target is cancelled. and new iteration kicks off.
         verify(targetSpy, times(1)).cancel("Cancelling stuck target after new primary");
-        verify(serviceSpy, times(1)).startReplication(eq(replicaShard), any(), any());
+        verify(serviceSpy, times(1)).startReplication(eq(replicaShard), any(), any(), anyBoolean());
     }
 
     public void testNewCheckpointBehindCurrentCheckpoint() {
         SegmentReplicationTargetService spy = spy(sut);
         spy.onNewCheckpoint(checkpoint, replicaShard);
-        verify(spy, times(0)).startReplication(any(), any(), any());
+        verify(spy, times(0)).startReplication(any(), any(), any(), anyBoolean());
     }
 
     public void testShardNotStarted() throws IOException {
         SegmentReplicationTargetService spy = spy(sut);
         IndexShard shard = newShard(false);
         spy.onNewCheckpoint(checkpoint, shard);
-        verify(spy, times(0)).startReplication(any(), any(), any());
+        verify(spy, times(0)).startReplication(any(), any(), any(), anyBoolean());
         closeShards(shard);
     }
 
@@ -471,7 +478,7 @@ public class SegmentReplicationTargetServiceTests extends IndexShardTestCase {
         spy.onNewCheckpoint(aheadCheckpoint, spyShard);
 
         // Verify that checkpoint is not processed as shard is in PrimaryMode.
-        verify(spy, times(0)).startReplication(any(), any(), any());
+        verify(spy, times(0)).startReplication(any(), any(), any(), anyBoolean());
         closeShards(primaryShard);
     }
 
@@ -484,7 +491,7 @@ public class SegmentReplicationTargetServiceTests extends IndexShardTestCase {
     }
 
     public void testAfterIndexShardStartedProcessesLatestReceivedCheckpoint() {
-        sut.updateLatestReceivedCheckpoint(aheadCheckpoint, replicaShard);
+        sut.updateLatestReceivedCheckpoint(aheadCheckpoint, replicaShard, false);
         SegmentReplicationTargetService spy = spy(sut);
         doNothing().when(spy).onNewCheckpoint(any(), any());
         spy.afterIndexShardStarted(replicaShard);
@@ -492,14 +499,14 @@ public class SegmentReplicationTargetServiceTests extends IndexShardTestCase {
     }
 
     public void testStartReplicationListenerSuccess() throws InterruptedException {
-        sut.updateLatestReceivedCheckpoint(aheadCheckpoint, replicaShard);
+        sut.updateLatestReceivedCheckpoint(aheadCheckpoint, replicaShard, false);
         SegmentReplicationTargetService spy = spy(sut);
         CountDownLatch latch = new CountDownLatch(1);
         doAnswer(i -> {
             ((SegmentReplicationTargetService.SegmentReplicationListener) i.getArgument(2)).onReplicationDone(state);
             latch.countDown();
             return null;
-        }).when(spy).startReplication(any(), any(), any());
+        }).when(spy).startReplication(any(), any(), any(), anyBoolean());
         doNothing().when(spy).updateVisibleCheckpoint(eq(0L), any());
         spy.afterIndexShardStarted(replicaShard);
 
@@ -508,7 +515,7 @@ public class SegmentReplicationTargetServiceTests extends IndexShardTestCase {
     }
 
     public void testStartReplicationListenerFailure() throws InterruptedException {
-        sut.updateLatestReceivedCheckpoint(aheadCheckpoint, replicaShard);
+        sut.updateLatestReceivedCheckpoint(aheadCheckpoint, replicaShard, false);
         SegmentReplicationTargetService spy = spy(sut);
         CountDownLatch latch = new CountDownLatch(1);
         doAnswer(i -> {
@@ -519,7 +526,7 @@ public class SegmentReplicationTargetServiceTests extends IndexShardTestCase {
             );
             latch.countDown();
             return null;
-        }).when(spy).startReplication(any(), any(), any());
+        }).when(spy).startReplication(any(), any(), any(), anyBoolean());
         doNothing().when(spy).updateVisibleCheckpoint(eq(0L), any());
         spy.afterIndexShardStarted(replicaShard);
 
@@ -529,27 +536,27 @@ public class SegmentReplicationTargetServiceTests extends IndexShardTestCase {
 
     public void testDoNotProcessLatestCheckpointIfCheckpointIsBehind() {
         SegmentReplicationTargetService service = spy(sut);
-        doReturn(mock(SegmentReplicationTarget.class)).when(service).startReplication(any(), any(), any());
+        doReturn(mock(SegmentReplicationTarget.class)).when(service).startReplication(any(), any(), any(), anyBoolean());
         ReplicationCheckpoint checkpoint = replicaShard.getLatestReplicationCheckpoint();
-        service.updateLatestReceivedCheckpoint(checkpoint, replicaShard);
+        service.updateLatestReceivedCheckpoint(checkpoint, replicaShard, false);
         service.processLatestReceivedCheckpoint(replicaShard, null);
-        verify(service, times(0)).startReplication(eq(replicaShard), eq(checkpoint), any());
+        verify(service, times(0)).startReplication(eq(replicaShard), eq(checkpoint), any(), anyBoolean());
     }
 
     public void testProcessLatestCheckpointIfCheckpointAhead() {
         SegmentReplicationTargetService service = spy(sut);
         doNothing().when(service).startReplication(any());
-        doReturn(mock(SegmentReplicationTarget.class)).when(service).startReplication(any(), any(), any());
-        service.updateLatestReceivedCheckpoint(aheadCheckpoint, replicaShard);
+        doReturn(mock(SegmentReplicationTarget.class)).when(service).startReplication(any(), any(), any(), anyBoolean());
+        service.updateLatestReceivedCheckpoint(aheadCheckpoint, replicaShard, false);
         service.processLatestReceivedCheckpoint(replicaShard, null);
-        verify(service, times(1)).startReplication(eq(replicaShard), eq(aheadCheckpoint), any());
+        verify(service, times(1)).startReplication(eq(replicaShard), eq(aheadCheckpoint), any(), anyBoolean());
     }
 
     public void testOnNewCheckpointInvokedOnClosedShardDoesNothing() throws IOException {
         closeShards(replicaShard);
         SegmentReplicationTargetService spy = spy(sut);
         spy.onNewCheckpoint(aheadCheckpoint, replicaShard);
-        verify(spy, times(0)).updateLatestReceivedCheckpoint(any(), any());
+        verify(spy, times(0)).updateLatestReceivedCheckpoint(any(), any(), anyBoolean());
     }
 
     public void testBeforeIndexShardClosed_DoesNothingForDocRepIndex() throws IOException {
@@ -681,7 +688,8 @@ public class SegmentReplicationTargetServiceTests extends IndexShardTestCase {
                     assertEquals(SegmentReplicationState.Stage.INIT, state.getStage());
                     assertEquals(cancelReason, e.getMessage());
                 }
-            }
+            },
+            randomBoolean()
         );
         target.cancel(cancelReason);
         sut.startReplication(target);

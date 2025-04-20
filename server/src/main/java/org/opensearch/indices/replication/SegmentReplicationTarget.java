@@ -19,6 +19,7 @@ import org.apache.lucene.store.IOContext;
 import org.apache.lucene.store.IndexInput;
 import org.opensearch.OpenSearchCorruptionException;
 import org.opensearch.action.StepListener;
+import org.opensearch.common.TriConsumer;
 import org.opensearch.common.UUIDs;
 import org.opensearch.common.lucene.Lucene;
 import org.opensearch.common.util.CancellableThreads;
@@ -40,7 +41,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 /**
@@ -54,6 +54,7 @@ public class SegmentReplicationTarget extends ReplicationTarget {
     private final SegmentReplicationSource source;
     private final SegmentReplicationState state;
     protected final MultiFileWriter multiFileWriter;
+    private final boolean blockLevelFetch;
 
     public final static String REPLICATION_PREFIX = "replication.";
 
@@ -61,7 +62,8 @@ public class SegmentReplicationTarget extends ReplicationTarget {
         IndexShard indexShard,
         ReplicationCheckpoint checkpoint,
         SegmentReplicationSource source,
-        ReplicationListener listener
+        ReplicationListener listener,
+        boolean blockLevelFetch
     ) {
         super("replication_target", indexShard, new ReplicationLuceneIndex(), listener);
         this.checkpoint = checkpoint;
@@ -74,6 +76,7 @@ public class SegmentReplicationTarget extends ReplicationTarget {
             indexShard.recoveryState().getTargetNode()
         );
         this.multiFileWriter = new MultiFileWriter(indexShard.store(), stateIndex, getPrefix(), logger, this::ensureRefCount);
+        this.blockLevelFetch = blockLevelFetch;
     }
 
     @Override
@@ -111,7 +114,7 @@ public class SegmentReplicationTarget extends ReplicationTarget {
     }
 
     public SegmentReplicationTarget retryCopy() {
-        return new SegmentReplicationTarget(indexShard, checkpoint, source, listener);
+        return new SegmentReplicationTarget(indexShard, checkpoint, source, listener, blockLevelFetch);
     }
 
     @Override
@@ -163,7 +166,7 @@ public class SegmentReplicationTarget extends ReplicationTarget {
      *
      * @param listener {@link ActionListener} listener.
      */
-    public void startReplication(ActionListener<Void> listener, BiConsumer<ReplicationCheckpoint, IndexShard> checkpointUpdater) {
+    public void startReplication(ActionListener<Void> listener, TriConsumer<ReplicationCheckpoint, IndexShard, Boolean> checkpointUpdater) {
         cancellableThreads.setOnCancel((reason, beforeCancelEx) -> {
             throw new CancellableThreads.ExecutionCancelledException("replication was canceled reason [" + reason + "]");
         });
@@ -175,29 +178,48 @@ public class SegmentReplicationTarget extends ReplicationTarget {
         logger.trace(new ParameterizedMessage("Starting Replication Target: {}", description()));
         // Get list of files to copy from this checkpoint.
         state.setStage(SegmentReplicationState.Stage.GET_CHECKPOINT_INFO);
+        logger.info("stage={} blockLevelFetch={}", SegmentReplicationState.Stage.GET_CHECKPOINT_INFO, blockLevelFetch);
         cancellableThreads.checkForCancel();
         source.getCheckpointMetadata(getId(), checkpoint, checkpointInfoListener);
 
-        checkpointInfoListener.whenComplete(checkpointInfo -> {
-            checkpointUpdater.accept(checkpointInfo.getCheckpoint(), this.indexShard);
+        if (blockLevelFetch) {
+            checkpointInfoListener.whenComplete(checkpointInfoResponse -> {
+                checkpointUpdater.apply(checkpointInfoResponse.getCheckpoint(), this.indexShard, false);
+                cancellableThreads.checkForCancel();
+                final SegmentInfos infos = store.buildSegmentInfos(
+                    checkpointInfoResponse.getInfosBytes(),
+                    checkpointInfoResponse.getCheckpoint().getSegmentsGen()
+                );
+                state.setStage(SegmentReplicationState.Stage.GET_FILES);
+                logger.info("stage={} blockLevelFetch=true", SegmentReplicationState.Stage.GET_FILES);
+                state.setStage(SegmentReplicationState.Stage.FINALIZE_REPLICATION);
+                logger.info("stage={} blockLevelFetch=true", SegmentReplicationState.Stage.FINALIZE_REPLICATION);
+                indexShard.finalizeReplication(infos);
+                listener.onResponse(null);
+            }, listener::onFailure);
+        } else {
+            checkpointInfoListener.whenComplete(checkpointInfo -> {
+                checkpointUpdater.apply(checkpointInfo.getCheckpoint(), this.indexShard, false);
 
-            final List<StoreFileMetadata> filesToFetch = getFiles(checkpointInfo);
-            state.setStage(SegmentReplicationState.Stage.GET_FILES);
-            cancellableThreads.checkForCancel();
-            source.getSegmentFiles(
-                getId(),
-                checkpointInfo.getCheckpoint(),
-                filesToFetch,
-                indexShard,
-                this::updateFileRecoveryBytes,
-                getFilesListener
-            );
-        }, listener::onFailure);
+                final List<StoreFileMetadata> filesToFetch = getFiles(checkpointInfo);
+                state.setStage(SegmentReplicationState.Stage.GET_FILES);
+                logger.info("stage={} blockLevelFetch=false", SegmentReplicationState.Stage.GET_FILES);
+                cancellableThreads.checkForCancel();
+                source.getSegmentFiles(
+                    getId(),
+                    checkpointInfo.getCheckpoint(),
+                    filesToFetch,
+                    indexShard,
+                    this::updateFileRecoveryBytes,
+                    getFilesListener
+                );
+            }, listener::onFailure);
 
-        getFilesListener.whenComplete(response -> {
-            finalizeReplication(checkpointInfoListener.result());
-            listener.onResponse(null);
-        }, listener::onFailure);
+            getFilesListener.whenComplete(response -> {
+                finalizeReplication(checkpointInfoListener.result());
+                listener.onResponse(null);
+            }, listener::onFailure);
+        }
     }
 
     private List<StoreFileMetadata> getFiles(CheckpointInfoResponse checkpointInfo) throws IOException {
@@ -293,6 +315,7 @@ public class SegmentReplicationTarget extends ReplicationTarget {
     private void finalizeReplication(CheckpointInfoResponse checkpointInfoResponse) throws OpenSearchCorruptionException {
         cancellableThreads.checkForCancel();
         state.setStage(SegmentReplicationState.Stage.FINALIZE_REPLICATION);
+        logger.info("stage={} blockLevelFetch=false", SegmentReplicationState.Stage.FINALIZE_REPLICATION);
         // Handle empty SegmentInfos bytes for recovering replicas
         if (checkpointInfoResponse.getInfosBytes() == null) {
             return;
@@ -339,5 +362,9 @@ public class SegmentReplicationTarget extends ReplicationTarget {
                 store.decRef();
             }
         }
+    }
+
+    public boolean isBlockLevelFetch() {
+        return blockLevelFetch;
     }
 }

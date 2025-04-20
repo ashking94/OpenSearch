@@ -1701,7 +1701,8 @@ public abstract class IndexShardTestCase extends OpenSearchTestCase {
             final SegmentReplicationTarget target = targetService.startReplication(
                 replica,
                 primaryShard.getLatestReplicationCheckpoint(),
-                getTargetListener(primaryShard, replica, primaryMetadata, countDownLatch)
+                getTargetListener(primaryShard, replica, primaryMetadata, countDownLatch),
+                false
             );
             ids.add(target);
         }

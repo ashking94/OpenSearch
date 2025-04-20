@@ -125,14 +125,14 @@ public class PublishCheckpointAction extends TransportReplicationAction<
     /**
      * Publish checkpoint request to shard
      */
-    final void publish(IndexShard indexShard, ReplicationCheckpoint checkpoint) {
+    final void publish(IndexShard indexShard, ReplicationCheckpoint checkpoint, boolean blockLevelFetch) {
         String primaryAllocationId = indexShard.routingEntry().allocationId().getId();
         long primaryTerm = indexShard.getPendingPrimaryTerm();
         final ThreadContext threadContext = threadPool.getThreadContext();
         try (ThreadContext.StoredContext ignore = threadContext.stashContext()) {
             // we have to execute under the system context so that if security is enabled the sync is authorized
             ThreadContextAccess.doPrivilegedVoid(threadContext::markAsSystemContext);
-            PublishCheckpointRequest request = new PublishCheckpointRequest(checkpoint);
+            PublishCheckpointRequest request = new PublishCheckpointRequest(checkpoint, blockLevelFetch);
             final ReplicationTask task = (ReplicationTask) taskManager.register("transport", "segrep_publish_checkpoint", request);
             final ReplicationTimer timer = new ReplicationTimer();
             timer.start();
@@ -224,7 +224,7 @@ public class PublishCheckpointAction extends TransportReplicationAction<
                 return new ReplicaResult();
             }
             if (request.getCheckpoint().getShardId().equals(replica.shardId())) {
-                replicationService.onNewCheckpoint(request.getCheckpoint(), replica);
+                replicationService.onNewCheckpoint(request.getCheckpoint(), replica, request.isBlockLevelFetch());
             }
             return new ReplicaResult();
         });

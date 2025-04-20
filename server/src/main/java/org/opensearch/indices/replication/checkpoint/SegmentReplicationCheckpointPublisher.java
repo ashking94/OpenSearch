@@ -34,9 +34,15 @@ public class SegmentReplicationCheckpointPublisher {
         this.publishAction = Objects.requireNonNull(publishAction);
     }
 
+    public void publish(IndexShard indexShard, ReplicationCheckpoint checkpoint, boolean blockLevelFetch) {
+        publishAction.publish(indexShard, checkpoint, blockLevelFetch);
+        if (blockLevelFetch == false) {
+            indexShard.onCheckpointPublished(checkpoint);
+        }
+    }
+
     public void publish(IndexShard indexShard, ReplicationCheckpoint checkpoint) {
-        publishAction.publish(indexShard, checkpoint);
-        indexShard.onCheckpointPublished(checkpoint);
+        this.publish(indexShard, checkpoint, false);
     }
 
     /**
@@ -46,13 +52,13 @@ public class SegmentReplicationCheckpointPublisher {
      */
     @PublicApi(since = "2.2.0")
     public interface PublishAction {
-        void publish(IndexShard indexShard, ReplicationCheckpoint checkpoint);
+        void publish(IndexShard indexShard, ReplicationCheckpoint checkpoint, boolean blockLevelFetch);
     }
 
     /**
      * NoOp Checkpoint publisher
      */
     public static final SegmentReplicationCheckpointPublisher EMPTY = new SegmentReplicationCheckpointPublisher(
-        (indexShard, checkpoint) -> {}
+        (indexShard, checkpoint, blockLevelFetch) -> {}
     );
 }

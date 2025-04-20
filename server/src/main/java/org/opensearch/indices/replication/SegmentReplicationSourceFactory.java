@@ -37,8 +37,8 @@ public class SegmentReplicationSourceFactory {
         this.clusterService = clusterService;
     }
 
-    public SegmentReplicationSource get(IndexShard shard) {
-        if (shard.indexSettings().isAssignedOnRemoteNode()) {
+    public SegmentReplicationSource get(IndexShard shard, boolean blockLevelFetch) {
+        if (shard.indexSettings().isAssignedOnRemoteNode() && blockLevelFetch == false) {
             return new RemoteStoreReplicationSource(shard);
         } else {
             return new PrimaryShardReplicationSource(
@@ -49,6 +49,10 @@ public class SegmentReplicationSourceFactory {
                 getPrimaryNode(shard.shardId())
             );
         }
+    }
+
+    public SegmentReplicationSource get(IndexShard shard) {
+        return get(shard, false);
     }
 
     private DiscoveryNode getPrimaryNode(ShardId shardId) {

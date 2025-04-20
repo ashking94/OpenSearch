@@ -14,6 +14,7 @@ import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.apache.lucene.index.CorruptIndexException;
 import org.opensearch.OpenSearchCorruptionException;
 import org.opensearch.common.SetOnce;
+import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.AbstractRunnable;
 import org.opensearch.common.util.concurrent.ConcurrentCollections;
@@ -51,7 +52,8 @@ public class SegmentReplicator {
     private final Map<ShardId, SegmentReplicationState> completedReplications = ConcurrentCollections.newConcurrentMap();
     private final ConcurrentMap<ShardId, ConcurrentNavigableMap<Long, ReplicationCheckpointStats>> replicationCheckpointStats =
         ConcurrentCollections.newConcurrentMap();
-    private final ConcurrentMap<ShardId, ReplicationCheckpoint> primaryCheckpoint = ConcurrentCollections.newConcurrentMap();
+    private final ConcurrentMap<ShardId, Tuple<ReplicationCheckpoint, Boolean>> primaryCheckpoint = ConcurrentCollections
+        .newConcurrentMap();
 
     private final ThreadPool threadPool;
     private final SetOnce<SegmentReplicationSourceFactory> sourceFactory;
@@ -85,7 +87,8 @@ public class SegmentReplicator {
                         shard.failShard("unrecoverable replication failure", e);
                     }
                 }
-            }
+            },
+            false
         );
     }
 
@@ -104,9 +107,10 @@ public class SegmentReplicator {
         final IndexShard indexShard,
         final ReplicationCheckpoint checkpoint,
         final SegmentReplicationSource source,
-        final SegmentReplicationTargetService.SegmentReplicationListener listener
+        final SegmentReplicationTargetService.SegmentReplicationListener listener,
+        final boolean blockLevelFetch
     ) {
-        final SegmentReplicationTarget target = new SegmentReplicationTarget(indexShard, checkpoint, source, listener);
+        final SegmentReplicationTarget target = new SegmentReplicationTarget(indexShard, checkpoint, source, listener, blockLevelFetch);
         startReplication(target, indexShard.getRecoverySettings().activityTimeout());
         return target;
     }
@@ -155,11 +159,17 @@ public class SegmentReplicator {
      * @param latestReceivedCheckPoint The most recent checkpoint from the primary
      * @param indexShard The index shard where its updated
      */
-    public void updateReplicationCheckpointStats(final ReplicationCheckpoint latestReceivedCheckPoint, final IndexShard indexShard) {
-        ReplicationCheckpoint primaryCheckPoint = this.primaryCheckpoint.get(indexShard.shardId());
-        if (primaryCheckPoint == null || latestReceivedCheckPoint.isAheadOf(primaryCheckPoint)) {
-            this.primaryCheckpoint.put(indexShard.shardId(), latestReceivedCheckPoint);
-            calculateReplicationCheckpointStats(latestReceivedCheckPoint, indexShard);
+    public void updateReplicationCheckpointStats(
+        final ReplicationCheckpoint latestReceivedCheckPoint,
+        final IndexShard indexShard,
+        boolean blockLevelFetch
+    ) {
+        Tuple<ReplicationCheckpoint, Boolean> primaryCheckPoint = this.primaryCheckpoint.get(indexShard.shardId());
+        if (primaryCheckPoint == null || latestReceivedCheckPoint.isAheadOf(primaryCheckPoint.v1()) || blockLevelFetch == false) {
+            this.primaryCheckpoint.put(indexShard.shardId(), Tuple.tuple(latestReceivedCheckPoint, blockLevelFetch));
+            if (blockLevelFetch == false) {
+                calculateReplicationCheckpointStats(latestReceivedCheckPoint, indexShard);
+            }
         }
     }
 
@@ -171,7 +181,7 @@ public class SegmentReplicator {
      * @param indexShard The index shard to prune checkpoints for
      */
     protected void pruneCheckpointsUpToLastSync(final IndexShard indexShard) {
-        ReplicationCheckpoint latestCheckpoint = this.primaryCheckpoint.get(indexShard.shardId());
+        ReplicationCheckpoint latestCheckpoint = this.primaryCheckpoint.get(indexShard.shardId()).v1();
         if (latestCheckpoint != null) {
             ReplicationCheckpoint indexReplicationCheckPoint = indexShard.getLatestReplicationCheckpoint();
             long segmentInfoVersion = indexReplicationCheckPoint.getSegmentInfosVersion();
@@ -276,9 +286,14 @@ public class SegmentReplicator {
             @Override
             public void onResponse(Void o) {
                 logger.debug(() -> new ParameterizedMessage("Finished replicating {} marking as done.", target.description()));
-                pruneCheckpointsUpToLastSync(target.indexShard());
+                if (target.isBlockLevelFetch() == false) {
+                    pruneCheckpointsUpToLastSync(target.indexShard());
+                }
+                logger.info("markAsDone isBlockLevelFetch={}", target.isBlockLevelFetch());
                 onGoingReplications.markAsDone(replicationId);
-                if (target.state().getIndex().recoveredFileCount() != 0 && target.state().getIndex().recoveredBytes() != 0) {
+                if (target.state().getIndex().recoveredFileCount() != 0
+                    && target.state().getIndex().recoveredBytes() != 0
+                    && target.isBlockLevelFetch() == false) {
                     completedReplications.put(target.shardId(), target.state());
                 }
             }
@@ -344,7 +359,7 @@ public class SegmentReplicator {
         return onGoingReplications.getOngoingReplicationTarget(shardId);
     }
 
-    ReplicationCheckpoint getPrimaryCheckpoint(ShardId shardId) {
+    Tuple<ReplicationCheckpoint, Boolean> getPrimaryCheckpoint(ShardId shardId) {
         return primaryCheckpoint.get(shardId);
     }
 
