@@ -26,6 +26,7 @@ import org.opensearch.common.util.CancellableThreads;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.index.shard.IndexShard;
+import org.opensearch.index.store.ShardMetadataRegistry;
 import org.opensearch.index.store.Store;
 import org.opensearch.index.store.StoreFileMetadata;
 import org.opensearch.indices.recovery.MultiFileWriter;
@@ -186,15 +187,21 @@ public class SegmentReplicationTarget extends ReplicationTarget {
             checkpointInfoListener.whenComplete(checkpointInfoResponse -> {
                 checkpointUpdater.apply(checkpointInfoResponse.getCheckpoint(), this.indexShard, false);
                 cancellableThreads.checkForCancel();
+
+                // Update the registry with latest metadata
+                ShardMetadataRegistry.updateMetadata(indexShard.shardId(), checkpointInfoResponse.getMetadataMap());
+
                 final SegmentInfos infos = store.buildSegmentInfos(
                     checkpointInfoResponse.getInfosBytes(),
                     checkpointInfoResponse.getCheckpoint().getSegmentsGen()
                 );
+                state.setStage(SegmentReplicationState.Stage.FILE_DIFF);
+                logger.info("stage={} blockLevelFetch=true", SegmentReplicationState.Stage.FILE_DIFF);
                 state.setStage(SegmentReplicationState.Stage.GET_FILES);
                 logger.info("stage={} blockLevelFetch=true", SegmentReplicationState.Stage.GET_FILES);
                 state.setStage(SegmentReplicationState.Stage.FINALIZE_REPLICATION);
                 logger.info("stage={} blockLevelFetch=true", SegmentReplicationState.Stage.FINALIZE_REPLICATION);
-                indexShard.finalizeReplication(infos);
+                indexShard.updateReaderManager(infos);
                 listener.onResponse(null);
             }, listener::onFailure);
         } else {

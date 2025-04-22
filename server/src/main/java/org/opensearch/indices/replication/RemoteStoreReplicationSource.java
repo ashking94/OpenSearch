@@ -124,6 +124,12 @@ public class RemoteStoreReplicationSource implements SegmentReplicationSource {
         ActionListener<GetSegmentFilesResponse> listener
     ) {
         try {
+            // try {
+            // logger.info("Sleeping for 10s");
+            // Thread.sleep(10000);
+            // } catch (InterruptedException e) {
+            // throw new RuntimeException(e);
+            // }
             if (filesToFetch.isEmpty()) {
                 listener.onResponse(new GetSegmentFilesResponse(Collections.emptyList()));
                 return;

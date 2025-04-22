@@ -1182,8 +1182,10 @@ public class RemoteStoreCoreTestCase extends RemoteStoreBaseIntegTestCase {
         indexSingleDoc(INDEX_NAME);
         assertHitCount(client(primaryShardNode).prepareSearch(INDEX_NAME).setSize(0).get(), 0);
         assertHitCount(client(replicaShardNode).prepareSearch(INDEX_NAME).setSize(0).get(), 0);
+        logger.info("Started refresh");
         refresh(INDEX_NAME);
-
-        assertBusy(() -> assertHitCount(client(replicaShardNode).prepareSearch(INDEX_NAME).setSize(0).get(), 1));
+        assertBusy(() -> assertHitCount(client(replicaShardNode).prepareSearch(INDEX_NAME).setSize(10).get(), 1));
+        logger.info("Search successful");
+        assertBusy(() -> assertHitCount(client(replicaShardNode).prepareSearch(INDEX_NAME).setSize(10).get(), 1));
     }
 }

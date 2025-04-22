@@ -202,6 +202,8 @@ public final class IndexScopedSettings extends AbstractScopedSettings {
                 IndexModule.INDEX_RECOVERY_TYPE_SETTING,
                 IndexModule.INDEX_QUERY_CACHE_ENABLED_SETTING,
                 FsDirectoryFactory.INDEX_LOCK_FACTOR_SETTING,
+                FsDirectoryFactory.PRIMARY_BLOCK_FETCH,
+                FsDirectoryFactory.PRIMARY_BLOCK_SIZE_SETTING,
                 Store.FORCE_RAM_TERM_DICT,
                 EngineConfig.INDEX_CODEC_SETTING,
                 EngineConfig.INDEX_CODEC_COMPRESSION_LEVEL_SETTING,

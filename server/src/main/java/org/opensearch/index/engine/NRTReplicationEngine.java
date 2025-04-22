@@ -180,6 +180,16 @@ public class NRTReplicationEngine extends Engine {
         }
     }
 
+    public synchronized void updateReaderManager(final SegmentInfos infos) throws IOException {
+        try (ReleasableLock lock = writeLock.acquire()) {
+            // Update the current infos reference on the Engine's reader.
+            ensureOpen();
+            // TODO - Does it make sense to have 2 reader managers here?
+            // 1st for serving BLF searches and 2nd for everything else?
+            readerManager.updateSegments(infos);
+        }
+    }
+
     /**
      * Persist the latest live SegmentInfos.
      * <p>

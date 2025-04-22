@@ -409,7 +409,7 @@ public class SegmentReplicationTargetService extends AbstractLifecycleComponent 
             return;
         }
         ShardRouting primaryShard = clusterService.state().routingTable().shardRoutingTable(replicaShard.shardId()).primaryShard();
-
+        logger.info("Updating visible checkpoint");
         final UpdateVisibleCheckpointRequest request = new UpdateVisibleCheckpointRequest(
             replicationId,
             replicaShard.routingEntry().allocationId().getId(),

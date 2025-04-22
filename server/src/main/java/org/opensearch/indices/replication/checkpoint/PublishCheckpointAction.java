@@ -126,6 +126,7 @@ public class PublishCheckpointAction extends TransportReplicationAction<
      * Publish checkpoint request to shard
      */
     final void publish(IndexShard indexShard, ReplicationCheckpoint checkpoint, boolean blockLevelFetch) {
+        logger.info("published checkpoint={} blockLevelFetch={}", indexShard, checkpoint, blockLevelFetch);
         String primaryAllocationId = indexShard.routingEntry().allocationId().getId();
         long primaryTerm = indexShard.getPendingPrimaryTerm();
         final ThreadContext threadContext = threadPool.getThreadContext();
