@@ -159,6 +159,7 @@ import org.opensearch.index.mapper.MappingTransformerRegistry;
 import org.opensearch.index.recovery.RemoteStoreRestoreService;
 import org.opensearch.index.remote.RemoteIndexPathUploader;
 import org.opensearch.index.remote.RemoteStoreStatsTrackerFactory;
+import org.opensearch.index.store.FsDirectoryFactory;
 import org.opensearch.index.store.IndexStoreListener;
 import org.opensearch.index.store.RemoteSegmentStoreDirectoryFactory;
 import org.opensearch.index.store.remote.filecache.FileCache;
@@ -610,6 +611,7 @@ public class Node implements Closeable {
             }
 
             final SetOnce<RepositoriesService> repositoriesServiceReference = new SetOnce<>();
+            final SetOnce<TransportService> transportServiceReference = new SetOnce<>();
             final RemoteStoreNodeService remoteStoreNodeService = new RemoteStoreNodeService(repositoriesServiceReference::get, threadPool);
             localNodeFactory = new LocalNodeFactory(settings, nodeEnvironment.nodeId(), remoteStoreNodeService);
             resourcesToClose.add(() -> ThreadPool.terminate(threadPool, 10, TimeUnit.SECONDS));
@@ -873,10 +875,17 @@ public class Node implements Closeable {
             pluginsService.filterPlugins(IngestionConsumerPlugin.class)
                 .forEach(plugin -> ingestionConsumerFactories.putAll(plugin.getIngestionConsumerFactories()));
 
+            // Create the enhanced directory factory with dependencies
+            FsDirectoryFactory fsDirectoryFactory = new FsDirectoryFactory(
+                Optional.of(clusterService),
+                Optional.ofNullable(transportServiceReference::get)
+            );
+
             final Map<String, IndexStorePlugin.DirectoryFactory> builtInDirectoryFactories = IndexModule.createBuiltInDirectoryFactories(
                 repositoriesServiceReference::get,
                 threadPool,
-                fileCache
+                fileCache,
+                fsDirectoryFactory
             );
 
             final Map<String, IndexStorePlugin.DirectoryFactory> directoryFactories = new HashMap<>();
@@ -965,7 +974,8 @@ public class Node implements Closeable {
                 fileCache,
                 compositeIndexSettings,
                 segmentReplicator::startReplication,
-                segmentReplicator::getSegmentReplicationStats
+                segmentReplicator::getSegmentReplicationStats,
+                fsDirectoryFactory
             );
 
             final IngestService ingestService = new IngestService(
@@ -1212,6 +1222,7 @@ public class Node implements Closeable {
                 taskHeaders,
                 tracer
             );
+            transportServiceReference.set(transportService);
             TopNSearchTasksLogger taskConsumer = new TopNSearchTasksLogger(settings, settingsModule.getClusterSettings());
             transportService.getTaskManager().registerTaskResourceConsumer(taskConsumer);
             this.extensionsManager.initializeServicesAndRestHandler(

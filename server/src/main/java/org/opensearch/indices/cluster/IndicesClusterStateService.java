@@ -78,6 +78,7 @@ import org.opensearch.index.shard.IndexShardState;
 import org.opensearch.index.shard.PrimaryReplicaSyncer;
 import org.opensearch.index.shard.PrimaryReplicaSyncer.ResyncTask;
 import org.opensearch.index.shard.ShardNotFoundException;
+import org.opensearch.index.store.ShardMetadataCleanupListener;
 import org.opensearch.indices.IndicesService;
 import org.opensearch.indices.recovery.PeerRecoverySourceService;
 import org.opensearch.indices.recovery.PeerRecoveryTargetService;
@@ -131,6 +132,7 @@ public class IndicesClusterStateService extends AbstractLifecycleComponent imple
     private final NodeMappingRefreshAction nodeMappingRefreshAction;
 
     private static final ActionListener<Void> SHARD_STATE_ACTION_LISTENER = ActionListener.wrap(() -> {});
+    private static final ShardMetadataCleanupListener SHARD_METADATA_CLEANUP_LISTENER = new ShardMetadataCleanupListener();
 
     private final Settings settings;
     // a list of shards that failed during recovery
@@ -230,6 +232,7 @@ public class IndicesClusterStateService extends AbstractLifecycleComponent imple
         indexEventListeners.add(segmentReplicationTargetService);
         indexEventListeners.add(segmentReplicationSourceService);
         indexEventListeners.add(remoteStoreStatsTrackerFactory);
+        indexEventListeners.add(SHARD_METADATA_CLEANUP_LISTENER);
         this.segmentReplicationTargetService = segmentReplicationTargetService;
         this.builtInIndexListener = Collections.unmodifiableList(indexEventListeners);
         this.indicesService = indicesService;

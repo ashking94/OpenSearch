@@ -423,7 +423,8 @@ public class RemoteIndexShardTests extends SegmentReplicationIndexShardTests {
                         assertFalse(sendShardFailure);
                         logger.error("Replication error", e);
                     }
-                }
+                },
+                false
             );
             latch.await();
             Set<String> onDiskFiles = new HashSet<>(Arrays.asList(replica.store().directory().listAll()));
@@ -460,7 +461,8 @@ public class RemoteIndexShardTests extends SegmentReplicationIndexShardTests {
                         logger.error("Replication error", e);
                         Assert.fail("Replication should not fail");
                     }
-                }
+                },
+                false
             );
             waitForSecondRound.await();
             assertEquals(newTarget.state().getStage(), SegmentReplicationState.Stage.DONE);
@@ -515,7 +517,8 @@ public class RemoteIndexShardTests extends SegmentReplicationIndexShardTests {
                         waitOnReplicationCompletion.countDown();
                         assertFalse(sendShardFailure);
                     }
-                }
+                },
+                false
             );
             waitOnReplicationCompletion.await();
             assertBusy(() -> { assertEquals("Target should be closed", 0, segmentReplicationTarget.refCount()); });

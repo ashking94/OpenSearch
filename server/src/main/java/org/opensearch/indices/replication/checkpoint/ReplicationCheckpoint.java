@@ -224,6 +224,10 @@ public class ReplicationCheckpoint implements Writeable, Comparable<ReplicationC
             || (primaryTerm == other.getPrimaryTerm() && segmentInfosVersion > other.getSegmentInfosVersion());
     }
 
+    public boolean isSame(@Nullable ReplicationCheckpoint other) {
+        return other == null || (primaryTerm == other.getPrimaryTerm() && segmentInfosVersion == other.getSegmentInfosVersion());
+    }
+
     public Map<String, StoreFileMetadata> getMetadataMap() {
         return metadataMap;
     }

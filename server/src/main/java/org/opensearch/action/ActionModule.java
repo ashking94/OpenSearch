@@ -329,6 +329,7 @@ import org.opensearch.extensions.rest.RestInitializeExtensionAction;
 import org.opensearch.extensions.rest.RestSendToExtensionAction;
 import org.opensearch.identity.IdentityService;
 import org.opensearch.index.seqno.RetentionLeaseActions;
+import org.opensearch.index.store.FetchSegmentBlockAction;
 import org.opensearch.indices.SystemIndices;
 import org.opensearch.persistent.CompletionPersistentTaskAction;
 import org.opensearch.persistent.RemovePersistentTaskAction;
@@ -826,6 +827,8 @@ public class ActionModule extends AbstractModule {
         actions.register(ResumeIngestionAction.INSTANCE, TransportResumeIngestionAction.class);
         actions.register(GetIngestionStateAction.INSTANCE, TransportGetIngestionStateAction.class);
         actions.register(UpdateIngestionStateAction.INSTANCE, TransportUpdateIngestionStateAction.class);
+
+        actions.register(FetchSegmentBlockAction.INSTANCE, FetchSegmentBlockAction.TransportFetchSegmentBlockAction.class);
 
         return unmodifiableMap(actions.getRegistry());
     }

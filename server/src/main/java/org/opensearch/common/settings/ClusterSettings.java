@@ -120,6 +120,7 @@ import org.opensearch.index.ShardIndexingPressureStore;
 import org.opensearch.index.compositeindex.CompositeIndexSettings;
 import org.opensearch.index.remote.RemoteStorePressureSettings;
 import org.opensearch.index.remote.RemoteStoreStatsTrackerFactory;
+import org.opensearch.index.store.BlockCache;
 import org.opensearch.index.store.remote.filecache.FileCacheSettings;
 import org.opensearch.indices.IndexingMemoryController;
 import org.opensearch.indices.IndicesQueryCache;
@@ -828,7 +829,11 @@ public final class ClusterSettings extends AbstractScopedSettings {
                 ),
 
                 // Setting related to refresh optimisations
-                IndicesService.CLUSTER_REFRESH_FIXED_INTERVAL_SCHEDULE_ENABLED_SETTING
+                IndicesService.CLUSTER_REFRESH_FIXED_INTERVAL_SCHEDULE_ENABLED_SETTING,
+
+                // Settings related to block level fetch from primary node
+                BlockCache.BLOCK_CACHE_SIZE_SETTING,
+                BlockCache.BLOCK_CACHE_EXPIRE_AFTER_ACCESS_SETTING
             )
         )
     );

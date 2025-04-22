@@ -249,6 +249,7 @@ public final class IndexModule {
     private final Map<String, IndexStorePlugin.RecoveryStateFactory> recoveryStateFactories;
     private final FileCache fileCache;
     private final CompositeIndexSettings compositeIndexSettings;
+    private final IndexStorePlugin.DirectoryFactory fsDirectoryFactory;
 
     /**
      * Construct the index module for the index with the specified index settings. The index module contains extension points for plugins
@@ -269,7 +270,8 @@ public final class IndexModule {
         final IndexNameExpressionResolver expressionResolver,
         final Map<String, IndexStorePlugin.RecoveryStateFactory> recoveryStateFactories,
         final FileCache fileCache,
-        final CompositeIndexSettings compositeIndexSettings
+        final CompositeIndexSettings compositeIndexSettings,
+        final IndexStorePlugin.DirectoryFactory fsDirectoryFactory
     ) {
         this.indexSettings = indexSettings;
         this.analysisRegistry = analysisRegistry;
@@ -283,6 +285,7 @@ public final class IndexModule {
         this.recoveryStateFactories = recoveryStateFactories;
         this.fileCache = fileCache;
         this.compositeIndexSettings = compositeIndexSettings;
+        this.fsDirectoryFactory = fsDirectoryFactory;
     }
 
     public IndexModule(
@@ -305,7 +308,8 @@ public final class IndexModule {
             expressionResolver,
             recoveryStateFactories,
             null,
-            null
+            null,
+            IndexModule.DEFAULT_DIRECTORY_FACTORY
         );
     }
 
@@ -695,7 +699,11 @@ public final class IndexModule {
         Function<IndexService, CheckedFunction<DirectoryReader, DirectoryReader, IOException>> readerWrapperFactory = indexReaderWrapper
             .get() == null ? (shard) -> null : indexReaderWrapper.get();
         eventListener.beforeIndexCreated(indexSettings.getIndex(), indexSettings.getSettings());
-        final IndexStorePlugin.DirectoryFactory directoryFactory = getDirectoryFactory(indexSettings, directoryFactories);
+        final IndexStorePlugin.DirectoryFactory directoryFactory = getDirectoryFactory(
+            indexSettings,
+            directoryFactories,
+            fsDirectoryFactory
+        );
         final IndexStorePlugin.RecoveryStateFactory recoveryStateFactory = getRecoveryStateFactory(indexSettings, recoveryStateFactories);
         QueryCache queryCache = null;
         IndexAnalyzers indexAnalyzers = null;
@@ -767,7 +775,8 @@ public final class IndexModule {
 
     private static IndexStorePlugin.DirectoryFactory getDirectoryFactory(
         final IndexSettings indexSettings,
-        final Map<String, IndexStorePlugin.DirectoryFactory> indexStoreFactories
+        final Map<String, IndexStorePlugin.DirectoryFactory> indexStoreFactories,
+        final IndexStorePlugin.DirectoryFactory fsDirectoryFactory
     ) {
         final String storeType = indexSettings.getValue(INDEX_STORE_TYPE_SETTING);
         final Type type;
@@ -786,7 +795,7 @@ public final class IndexModule {
         }
         final IndexStorePlugin.DirectoryFactory factory;
         if (storeType.isEmpty()) {
-            factory = DEFAULT_DIRECTORY_FACTORY;
+            factory = fsDirectoryFactory;
         } else {
             factory = indexStoreFactories.get(storeType);
             if (factory == null) {
@@ -859,9 +868,11 @@ public final class IndexModule {
     public static Map<String, IndexStorePlugin.DirectoryFactory> createBuiltInDirectoryFactories(
         Supplier<RepositoriesService> repositoriesService,
         ThreadPool threadPool,
-        FileCache remoteStoreFileCache
+        FileCache remoteStoreFileCache,
+        IndexStorePlugin.DirectoryFactory fsDirectoryFactory
     ) {
         final Map<String, IndexStorePlugin.DirectoryFactory> factories = new HashMap<>();
+
         for (Type type : Type.values()) {
             switch (type) {
                 case HYBRIDFS:
@@ -869,7 +880,7 @@ public final class IndexModule {
                 case FS:
                 case MMAPFS:
                 case SIMPLEFS:
-                    factories.put(type.getSettingsKey(), DEFAULT_DIRECTORY_FACTORY);
+                    factories.put(type.getSettingsKey(), fsDirectoryFactory);
                     break;
                 case REMOTE_SNAPSHOT:
                     factories.put(

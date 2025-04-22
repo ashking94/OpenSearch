@@ -64,6 +64,7 @@ public class NRTReplicationEngine extends Engine {
     private final WriteOnlyTranslogManager translogManager;
     private final Lock flushLock = new ReentrantLock();
     protected final ReplicaFileTracker replicaFileTracker;
+    private volatile boolean downloadNeeded;
 
     private volatile long lastReceivedPrimaryGen = SequenceNumbers.NO_OPS_PERFORMED;
 
@@ -171,12 +172,25 @@ public class NRTReplicationEngine extends Engine {
             // a lower gen from a newly elected primary shard that is behind this shard's last commit gen.
             // In that case we still commit into the next local generation.
             if (incomingGeneration != this.lastReceivedPrimaryGen) {
+                logger.info("Triggered flush for segmentInfos={}", infos);
                 flush(false, true);
                 translogManager.getDeletionPolicy().setLocalCheckpointOfSafeCommit(maxSeqNo);
                 translogManager.rollTranslogGeneration();
             }
             this.lastReceivedPrimaryGen = incomingGeneration;
             localCheckpointTracker.fastForwardProcessedSeqNo(maxSeqNo);
+            downloadNeeded = false;
+        }
+    }
+
+    public synchronized void updateReaderManager(final SegmentInfos infos) throws IOException {
+        try (ReleasableLock lock = writeLock.acquire()) {
+            // Update the current infos reference on the Engine's reader.
+            ensureOpen();
+            // TODO - Does it make sense to have 2 reader managers here?
+            // 1st for serving BLF searches and 2nd for everything else?
+            readerManager.updateSegments(infos);
+            downloadNeeded = true;
         }
     }
 
@@ -508,7 +522,7 @@ public class NRTReplicationEngine extends Engine {
     }
 
     @Override
-    protected SegmentInfos getLastCommittedSegmentInfos() {
+    public SegmentInfos getLastCommittedSegmentInfos() {
         return lastCommittedSegmentInfos;
     }
 
@@ -538,5 +552,9 @@ public class NRTReplicationEngine extends Engine {
     private DirectoryReader getDirectoryReader() throws IOException {
         // for segment replication: replicas should create the reader from store, we don't want an open IW on replicas.
         return new SoftDeletesDirectoryReaderWrapper(DirectoryReader.open(store.directory()), Lucene.SOFT_DELETES_FIELD);
+    }
+
+    public boolean isDownloadNeeded() {
+        return downloadNeeded;
     }
 }

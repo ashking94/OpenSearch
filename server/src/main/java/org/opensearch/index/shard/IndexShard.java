@@ -1737,6 +1737,13 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
         }
     }
 
+    public void updateReaderManager(SegmentInfos infos) throws IOException {
+        Optional<NRTReplicationEngine> engineOptional = getReplicationEngine();
+        if (engineOptional.isPresent()) {
+            engineOptional.get().updateReaderManager(infos);
+        }
+    }
+
     /**
      * Snapshots the most recent safe index commit from the currently running engine.
      * All index files referenced by this index commit won't be freed until the commit/snapshot is closed.
@@ -1877,7 +1884,17 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
         if (isSegmentReplicationAllowed() == false) {
             return false;
         }
+
         final ReplicationCheckpoint localCheckpoint = getLatestReplicationCheckpoint();
+        logger.info("Local checkpoint: {}, Requested checkpoint: {}", localCheckpoint, requestCheckpoint);
+        logger.info("downloadNeeded={}", getReplicationEngine().get().isDownloadNeeded());
+        if (requestCheckpoint.isSame(localCheckpoint)
+            && getReplicationEngine().isPresent()
+            && getReplicationEngine().get().isDownloadNeeded()) {
+            logger.info("Download needed");
+            return true;
+        }
+
         if (requestCheckpoint.isAheadOf(localCheckpoint) == false) {
             logger.trace(
                 () -> new ParameterizedMessage(
@@ -1936,6 +1953,12 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
      */
     public Map<String, StoreFileMetadata> getSegmentMetadataMap() throws IOException {
         try (final GatedCloseable<SegmentInfos> snapshot = getSegmentInfosSnapshot()) {
+            return store.getSegmentMetadataMap(snapshot.get());
+        }
+    }
+
+    public Map<String, StoreFileMetadata> getSegmentMetadataMapLatestSegmentInfos() throws IOException {
+        try (final GatedCloseable<SegmentInfos> snapshot = getLastCommittedSegmentInfosSnapshot()) {
             return store.getSegmentMetadataMap(snapshot.get());
         }
     }
@@ -4052,7 +4075,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
         if (indexSettings.isSegRepEnabledOrRemoteNode()) {
             internalRefreshListener.add(new ReplicationCheckpointUpdater());
         }
-        if (this.checkpointPublisher != null && shardRouting.primary() && indexSettings.isSegRepLocalEnabled()) {
+        if (this.checkpointPublisher != null && shardRouting.primary()) {
             internalRefreshListener.add(new CheckpointRefreshListener(this, this.checkpointPublisher));
         }
 
@@ -5423,6 +5446,10 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
      */
     public GatedCloseable<SegmentInfos> getSegmentInfosSnapshot() {
         return getEngine().getSegmentInfosSnapshot();
+    }
+
+    public GatedCloseable<SegmentInfos> getLastCommittedSegmentInfosSnapshot() {
+        return new GatedCloseable<>(getEngine().getLastCommittedSegmentInfos(), () -> {});
     }
 
     private TimeValue getRemoteTranslogUploadBufferInterval(Supplier<TimeValue> clusterRemoteTranslogBufferIntervalSupplier) {

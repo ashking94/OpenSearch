@@ -1169,4 +1169,23 @@ public class RemoteStoreCoreTestCase extends RemoteStoreBaseIntegTestCase {
         flushAndRefresh(INDEX_NAME);
         assertBusy(() -> { assertHitCount(client(dataNode).prepareSearch(INDEX_NAME).setSize(0).get(), 6); });
     }
+
+    public void testBLF() throws Exception {
+        internalCluster().startClusterManagerOnlyNode();
+        String primaryShardNode = internalCluster().startDataOnlyNodes(1).get(0);
+        createIndex(INDEX_NAME, remoteStoreIndexSettings(1, 10000L, -1));
+        ensureYellow(INDEX_NAME);
+
+        String replicaShardNode = internalCluster().startDataOnlyNodes(1).get(0);
+        ensureGreen(INDEX_NAME);
+
+        indexSingleDoc(INDEX_NAME);
+        assertHitCount(client(primaryShardNode).prepareSearch(INDEX_NAME).setSize(0).get(), 0);
+        assertHitCount(client(replicaShardNode).prepareSearch(INDEX_NAME).setSize(0).get(), 0);
+        logger.info("Started refresh");
+        refresh(INDEX_NAME);
+        assertBusy(() -> assertHitCount(client(replicaShardNode).prepareSearch(INDEX_NAME).setSize(10).get(), 1));
+        logger.info("Search successful");
+        assertBusy(() -> assertHitCount(client(replicaShardNode).prepareSearch(INDEX_NAME).setSize(8).get(), 1));
+    }
 }

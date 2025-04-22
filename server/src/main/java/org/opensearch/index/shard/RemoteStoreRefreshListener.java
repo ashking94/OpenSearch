@@ -359,6 +359,17 @@ public final class RemoteStoreRefreshListener extends ReleasableRetryableRefresh
         // Set the minimum sequence number for keeping translog
         indexShard.getEngine().translogManager().setMinSeqNoToKeep(lastRefreshedCheckpoint + 1);
         // Publishing the new checkpoint which is used for remote store + segrep indexes
+
+        // try {
+        // if (checkpoint.getSegmentInfosVersion() > 7) {
+        // logger.info("Sleeping for 10s in RemoteStoreRefreshListener");
+        // Thread.sleep(10000);
+        // logger.info("Done Sleeping for 10s in RemoteStoreRefreshListener");
+        // }
+        // } catch (InterruptedException e) {
+        // throw new RuntimeException(e);
+        // }
+
         checkpointPublisher.publish(indexShard, checkpoint);
         logger.debug("onSuccessfulSegmentsSync lastRefreshedCheckpoint={} checkpoint={}", lastRefreshedCheckpoint, checkpoint);
     }
@@ -459,7 +470,7 @@ public final class RemoteStoreRefreshListener extends ReleasableRetryableRefresh
                 batchUploadListener.onFailure(ex);
             });
             statsListener.beforeUpload(src);
-            remoteDirectory.copyFrom(storeDirectory, src, IOContext.DEFAULT, aggregatedListener, isLowPriorityUpload());
+            remoteDirectory.copyFrom(storeDirectory, src, IOContext.DEFAULT, aggregatedListener, true);
         }
     }
 

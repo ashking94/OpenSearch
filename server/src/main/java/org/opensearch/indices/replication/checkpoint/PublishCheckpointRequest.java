@@ -22,15 +22,22 @@ import java.io.IOException;
 public class PublishCheckpointRequest extends ReplicationRequest<PublishCheckpointRequest> {
 
     private final ReplicationCheckpoint checkpoint;
+    private final boolean blockLevelFetch;
 
-    public PublishCheckpointRequest(ReplicationCheckpoint checkpoint) {
+    public PublishCheckpointRequest(ReplicationCheckpoint checkpoint, boolean blockLevelFetch) {
         super(checkpoint.getShardId());
         this.checkpoint = checkpoint;
+        this.blockLevelFetch = blockLevelFetch;
+    }
+
+    public PublishCheckpointRequest(ReplicationCheckpoint checkpoint) {
+        this(checkpoint, false);
     }
 
     public PublishCheckpointRequest(StreamInput in) throws IOException {
         super(in);
         this.checkpoint = new ReplicationCheckpoint(in);
+        this.blockLevelFetch = in.readBoolean();
     }
 
     /**
@@ -40,10 +47,15 @@ public class PublishCheckpointRequest extends ReplicationRequest<PublishCheckpoi
         return checkpoint;
     }
 
+    public boolean isBlockLevelFetch() {
+        return blockLevelFetch;
+    }
+
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         checkpoint.writeTo(out);
+        out.writeBoolean(blockLevelFetch);
     }
 
     @Override

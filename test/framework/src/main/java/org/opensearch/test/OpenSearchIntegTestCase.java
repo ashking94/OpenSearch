@@ -2137,7 +2137,8 @@ public abstract class OpenSearchIntegTestCase extends OpenSearchTestCase {
     }
 
     protected boolean addMockIndexStorePlugin() {
-        return true;
+        // TODO - Fix this to also work for Primary Block Fetch
+        return false;
     }
 
     /** Returns {@code true} iff this test cluster should use a dummy http transport */

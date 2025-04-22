@@ -400,6 +400,7 @@ public class IndicesService extends AbstractLifecycleComponent
     private final Function<ShardId, ReplicationStats> segmentReplicationStatsProvider;
     private volatile int maxSizeInRequestCache;
     private volatile int defaultMaxMergeAtOnce;
+    private final IndexStorePlugin.DirectoryFactory fsDirectoryFactory;
 
     @Override
     protected void doStart() {
@@ -439,7 +440,8 @@ public class IndicesService extends AbstractLifecycleComponent
         FileCache fileCache,
         CompositeIndexSettings compositeIndexSettings,
         Consumer<IndexShard> replicator,
-        Function<ShardId, ReplicationStats> segmentReplicationStatsProvider
+        Function<ShardId, ReplicationStats> segmentReplicationStatsProvider,
+        IndexStorePlugin.DirectoryFactory fsDirectoryFactory
     ) {
         this.settings = settings;
         this.threadPool = threadPool;
@@ -567,6 +569,7 @@ public class IndicesService extends AbstractLifecycleComponent
         this.defaultMaxMergeAtOnce = CLUSTER_DEFAULT_INDEX_MAX_MERGE_AT_ONCE_SETTING.get(clusterService.getSettings());
         clusterService.getClusterSettings()
             .addSettingsUpdateConsumer(CLUSTER_DEFAULT_INDEX_MAX_MERGE_AT_ONCE_SETTING, this::onDefaultMaxMergeAtOnceUpdate);
+        this.fsDirectoryFactory = fsDirectoryFactory;
     }
 
     public IndicesService(
@@ -597,7 +600,8 @@ public class IndicesService extends AbstractLifecycleComponent
         Map<String, IngestionConsumerFactory> ingestionConsumerFactories,
         RecoverySettings recoverySettings,
         CacheService cacheService,
-        RemoteStoreSettings remoteStoreSettings
+        RemoteStoreSettings remoteStoreSettings,
+        IndexStorePlugin.DirectoryFactory fsDirectoryFactory
     ) {
         this(
             settings,
@@ -631,7 +635,8 @@ public class IndicesService extends AbstractLifecycleComponent
             null,
             null,
             null,
-            null
+            null,
+            fsDirectoryFactory
         );
     }
 
@@ -1037,7 +1042,8 @@ public class IndicesService extends AbstractLifecycleComponent
             indexNameExpressionResolver,
             recoveryStateFactories,
             fileCache,
-            compositeIndexSettings
+            compositeIndexSettings,
+            fsDirectoryFactory
         );
         for (IndexingOperationListener operationListener : indexingOperationListeners) {
             indexModule.addIndexOperationListener(operationListener);
@@ -1154,7 +1160,8 @@ public class IndicesService extends AbstractLifecycleComponent
             indexNameExpressionResolver,
             recoveryStateFactories,
             fileCache,
-            compositeIndexSettings
+            compositeIndexSettings,
+            fsDirectoryFactory
         );
         pluginsService.onIndexModule(indexModule);
         return indexModule.newIndexMapperService(xContentRegistry, mapperRegistry, scriptService);

@@ -135,7 +135,7 @@ grant {
   permission org.opensearch.SpecialPermission;
 
   // Allow host/ip name service lookups
-  permission java.net.SocketPermission "*", "resolve";
+  permission java.net.SocketPermission "*", "connect,resolve";
 
   // Allow reading and setting socket keepalive options
   permission jdk.net.NetworkPermission "getOption.TCP_KEEPIDLE";

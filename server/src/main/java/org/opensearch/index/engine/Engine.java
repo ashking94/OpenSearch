@@ -185,7 +185,7 @@ public abstract class Engine implements LifecycleAware, Closeable {
 
     public abstract TranslogManager translogManager();
 
-    protected abstract SegmentInfos getLastCommittedSegmentInfos();
+    public abstract SegmentInfos getLastCommittedSegmentInfos();
 
     /**
      * Return the latest active SegmentInfos from the engine.
