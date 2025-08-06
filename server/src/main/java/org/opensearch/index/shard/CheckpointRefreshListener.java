@@ -11,6 +11,7 @@ package org.opensearch.index.shard;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.lucene.search.ReferenceManager;
+import org.opensearch.indices.replication.checkpoint.ReplicationCheckpoint;
 import org.opensearch.indices.replication.checkpoint.SegmentReplicationCheckpointPublisher;
 
 import java.io.IOException;
@@ -44,7 +45,9 @@ public class CheckpointRefreshListener extends ReleasableRetryableRefreshListene
             && shard.state() == IndexShardState.STARTED
             && shard.getReplicationTracker().isPrimaryMode()
             && shard.indexSettings.isAssignedOnRemoteNode() == false) {
-            publisher.publish(shard, shard.getLatestReplicationCheckpoint());
+            ReplicationCheckpoint replicationCheckpoint = shard.getLatestReplicationCheckpoint();
+            logger.info("Checkpoint {} has been refreshed", replicationCheckpoint);
+            publisher.publish(shard, replicationCheckpoint);
         }
         return true;
     }

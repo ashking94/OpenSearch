@@ -108,6 +108,7 @@ public class PublishCheckpointAction extends AbstractPublishCheckpointAction<Pub
         IndexShard primary,
         ActionListener<PrimaryResult<PublishCheckpointRequest, ReplicationResponse>> listener
     ) {
+        logger.debug(() -> new ParameterizedMessage("shardOperationOnPrimary [{}]", request.getCheckpoint()));
         ActionListener.completeWith(listener, () -> new PrimaryResult<>(request, new ReplicationResponse()));
     }
 
