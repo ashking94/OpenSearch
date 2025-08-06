@@ -52,12 +52,14 @@ import org.opensearch.indices.recovery.RecoveryState;
 import org.opensearch.test.OpenSearchIntegTestCase.ClusterScope;
 import org.opensearch.test.OpenSearchIntegTestCase.Scope;
 import org.opensearch.test.ParameterizedStaticSettingsOpenSearchIntegTestCase;
+import org.opensearch.test.junit.annotations.TestIssueLogging;
 
 import java.util.Collection;
 
 import static org.opensearch.index.query.QueryBuilders.matchAllQuery;
 import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertHitCount;
 
+@TestIssueLogging(value = "_root:DEBUG", issueUrl = "https://github.com/opensearch-project/OpenSearch/issues/9117")
 @ClusterScope(scope = Scope.TEST, numDataNodes = 0)
 public class FullRollingRestartIT extends ParameterizedStaticSettingsOpenSearchIntegTestCase {
 
@@ -67,7 +69,7 @@ public class FullRollingRestartIT extends ParameterizedStaticSettingsOpenSearchI
 
     @ParametersFactory
     public static Collection<Object[]> parameters() {
-        return replicationSettings;
+        return testReplicationSettings;
     }
 
     protected void assertTimeout(ClusterHealthRequestBuilder requestBuilder) {

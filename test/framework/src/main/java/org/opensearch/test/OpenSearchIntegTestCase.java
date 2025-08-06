@@ -2548,7 +2548,7 @@ public abstract class OpenSearchIntegTestCase extends OpenSearchTestCase {
                                                     IndexShard replicaShard = getIndexShard(replica, index);
                                                     if (replicaShard.indexSettings().isSegRepEnabledOrRemoteNode()) {
                                                         assertEquals(
-                                                            "replica shards haven't caught up with primary",
+                                                            "replica shards haven't caught up with primary for shardId=" + primaryShard.shardId() + " replicaNode=" + replicaShard.getNodeId(),
                                                             getLatestSegmentInfoVersion(primaryShard),
                                                             getLatestSegmentInfoVersion(replicaShard)
                                                         );

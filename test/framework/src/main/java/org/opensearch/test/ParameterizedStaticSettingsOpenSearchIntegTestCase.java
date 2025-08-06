@@ -13,6 +13,7 @@ import org.opensearch.indices.replication.common.ReplicationType;
 
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -34,6 +35,7 @@ public abstract class ParameterizedStaticSettingsOpenSearchIntegTestCase extends
 
     protected static final String REMOTE_STORE_REPOSITORY_NAME = "test-remote-store-repo";
     private Path remoteStoreRepositoryPath;
+    public static final List<Object[]> testReplicationSettings = Collections.singletonList(new Object[]{Settings.builder().put(CLUSTER_REPLICATION_TYPE_SETTING.getKey(), ReplicationType.SEGMENT).build()});
     public static final List<Object[]> replicationSettings = Arrays.asList(
         new Object[] { Settings.builder().put(CLUSTER_REPLICATION_TYPE_SETTING.getKey(), ReplicationType.DOCUMENT).build() },
         new Object[] { Settings.builder().put(CLUSTER_REPLICATION_TYPE_SETTING.getKey(), ReplicationType.SEGMENT).build() }
