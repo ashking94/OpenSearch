@@ -1925,7 +1925,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
         if (latestReplicationCheckpoint.getSegmentInfosVersion() == segmentInfos.getVersion()
             && latestReplicationCheckpoint.getSegmentsGen() == segmentInfos.getGeneration()
             && latestReplicationCheckpoint.getPrimaryTerm() == getOperationPrimaryTerm()) {
-            logger.debug("computeReplicationCheckpoint skipped due to same checkpoint");
+            logger.debug("computeReplicationCheckpoint skipped due to same checkpoint {}", latestReplicationCheckpoint);
             return latestReplicationCheckpoint;
         }
         final Map<String, StoreFileMetadata> metadataMap = store.getSegmentMetadataMap(segmentInfos);

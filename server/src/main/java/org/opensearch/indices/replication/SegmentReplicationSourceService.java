@@ -141,7 +141,7 @@ public class SegmentReplicationSourceService extends AbstractLifecycleComponent 
             );
             channel.sendResponse(new CheckpointInfoResponse(handler.getCheckpoint(), handler.getInfosBytes()));
             timer.stop();
-            logger.trace(
+            logger.debug(
                 new ParameterizedMessage(
                     "[replication id {}] Source node sent checkpoint info [{}] to target node [{}], timing: {}",
                     request.getReplicationId(),
