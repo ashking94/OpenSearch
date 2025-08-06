@@ -162,6 +162,11 @@ public abstract class AbstractSegmentReplicationTarget extends ReplicationTarget
         getCheckpointMetadata(checkpointInfoListener);
 
         checkpointInfoListener.whenComplete(checkpointInfo -> {
+            ReplicationCheckpoint receivedCheckpoint = checkpointInfo.getCheckpoint();
+            if (checkpoint.isAheadOf(receivedCheckpoint)) {
+                listener.onFailure(new ReplicationFailedException("Rejecting stale checkpoint [" + receivedCheckpoint + "] during get checkpoint metadata since received checkpoint [" + checkpoint + "] is ahead of it"));
+                return;
+            }
             updateCheckpoint(checkpointInfo.getCheckpoint(), checkpointUpdater);
             final List<StoreFileMetadata> filesToFetch = getFiles(checkpointInfo);
             state.setStage(SegmentReplicationState.Stage.GET_FILES);
