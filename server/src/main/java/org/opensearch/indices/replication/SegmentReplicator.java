@@ -83,7 +83,7 @@ public class SegmentReplicator {
             new SegmentReplicationTargetService.SegmentReplicationListener() {
                 @Override
                 public void onReplicationDone(SegmentReplicationState state) {
-                    logger.trace("Completed replication for {}", shard.shardId());
+                    logger.debug("Completed replication for {}", shard.shardId());
                 }
 
                 @Override
@@ -144,7 +144,7 @@ public class SegmentReplicator {
             target.fail(e, false);
             return;
         }
-        logger.trace(() -> new ParameterizedMessage("Added new merged segment replication to collection {}", target.description()));
+        logger.debug(() -> new ParameterizedMessage("Added new merged segment replication to collection {}", target.description()));
         // Currently, we have not counted the completion information of the pre-copy merged segment, so the completedReplications parameter
         // is null.
         threadPool.generic().execute(new ReplicationRunner(replicationId, onGoingMergedSegmentReplications, null));
@@ -361,7 +361,7 @@ public class SegmentReplicator {
             target.fail(e, false);
             return;
         }
-        logger.trace(() -> new ParameterizedMessage("Added new replication to collection {}", target.description()));
+        logger.debug(() -> new ParameterizedMessage("Added new replication to collection {}", target.description()));
         threadPool.generic().execute(new ReplicationRunner(replicationId, onGoingReplications, completedReplications));
     }
 

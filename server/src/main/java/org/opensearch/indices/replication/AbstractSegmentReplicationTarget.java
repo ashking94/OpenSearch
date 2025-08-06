@@ -155,7 +155,7 @@ public abstract class AbstractSegmentReplicationTarget extends ReplicationTarget
         final StepListener<CheckpointInfoResponse> checkpointInfoListener = new StepListener<>();
         final StepListener<GetSegmentFilesResponse> getFilesListener = new StepListener<>();
 
-        logger.trace(new ParameterizedMessage("Starting Replication Target: {}", description()));
+        logger.debug(new ParameterizedMessage("Starting Replication Target: {}", description()));
         // Get list of files to copy from this checkpoint.
         state.setStage(SegmentReplicationState.Stage.GET_CHECKPOINT_INFO);
         cancellableThreads.checkForCancel();
@@ -166,12 +166,14 @@ public abstract class AbstractSegmentReplicationTarget extends ReplicationTarget
             final List<StoreFileMetadata> filesToFetch = getFiles(checkpointInfo);
             state.setStage(SegmentReplicationState.Stage.GET_FILES);
             cancellableThreads.checkForCancel();
+            logger.info("getFilesFromSource starting");
             getFilesFromSource(checkpointInfo, filesToFetch, getFilesListener);
         }, listener::onFailure);
 
         getFilesListener.whenComplete(response -> {
             cancellableThreads.checkForCancel();
             state.setStage(SegmentReplicationState.Stage.FINALIZE_REPLICATION);
+            logger.info("finalizeReplication starting");
             finalizeReplication(checkpointInfoListener.result());
             listener.onResponse(null);
         }, listener::onFailure);
@@ -215,7 +217,7 @@ public abstract class AbstractSegmentReplicationTarget extends ReplicationTarget
             .filter(md -> reuseFiles.contains(md.name()) == false)
             .collect(Collectors.toList());
 
-        logger.trace(
+        logger.debug(
             () -> new ParameterizedMessage(
                 "Replication diff for checkpoint {} {} {}",
                 checkpointInfo.getCheckpoint(),

@@ -10,6 +10,7 @@ package org.opensearch.indices.replication.checkpoint;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.opensearch.action.support.ActionFilters;
 import org.opensearch.action.support.replication.ReplicationMode;
 import org.opensearch.action.support.replication.ReplicationResponse;
@@ -113,6 +114,7 @@ public class PublishCheckpointAction extends AbstractPublishCheckpointAction<Pub
     @Override
     protected void doReplicaOperation(PublishCheckpointRequest request, IndexShard replica) {
         if (request.getCheckpoint().getShardId().equals(replica.shardId())) {
+            logger.debug(() -> new ParameterizedMessage("doReplicaOperation from primary [{}]", request.getCheckpoint()));
             replicationService.onNewCheckpoint(request.getCheckpoint(), replica);
         }
     }

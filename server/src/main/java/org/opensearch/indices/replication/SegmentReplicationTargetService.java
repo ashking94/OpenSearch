@@ -300,7 +300,7 @@ public class SegmentReplicationTargetService extends AbstractLifecycleComponent 
         // if the shard is in any state
         if (replicaShard.state().equals(IndexShardState.CLOSED)) {
             // ignore if shard is closed
-            logger.trace(() -> "Ignoring checkpoint, Shard is closed");
+            logger.debug(() -> "Ignoring checkpoint, Shard is closed");
             return;
         }
         updateLatestReceivedCheckpoint(receivedCheckpoint, replicaShard);
@@ -337,7 +337,8 @@ public class SegmentReplicationTargetService extends AbstractLifecycleComponent 
                     public void onReplicationDone(SegmentReplicationState state) {
                         logger.debug(
                             () -> new ParameterizedMessage(
-                                "[shardId {}] [replication id {}] Replication complete to {}, timing data: {}",
+                                "[shardId {}] [replication id {}] " +
+                                    "Replication complete to {}, timing data: {}",
                                 replicaShard.shardId().getId(),
                                 state.getReplicationId(),
                                 replicaShard.getLatestReplicationCheckpoint(),
@@ -378,7 +379,7 @@ public class SegmentReplicationTargetService extends AbstractLifecycleComponent 
                 updateVisibleCheckpoint(replicationId, replicaShard);
             }
         } else {
-            logger.trace(
+            logger.debug(
                 () -> new ParameterizedMessage("Ignoring checkpoint, shard not started {} {}", receivedCheckpoint, replicaShard.state())
             );
         }
@@ -427,7 +428,7 @@ public class SegmentReplicationTargetService extends AbstractLifecycleComponent 
         final TransportRequestOptions options = TransportRequestOptions.builder()
             .withTimeout(recoverySettings.internalActionTimeout())
             .build();
-        logger.trace(
+        logger.debug(
             () -> new ParameterizedMessage(
                 "Updating Primary shard that replica {}-{} is synced to checkpoint {}",
                 replicaShard.shardId(),
@@ -444,7 +445,7 @@ public class SegmentReplicationTargetService extends AbstractLifecycleComponent 
         final ActionListener<Void> listener = new ActionListener<>() {
             @Override
             public void onResponse(Void unused) {
-                logger.trace(
+                logger.debug(
                     () -> new ParameterizedMessage(
                         "Successfully updated replication checkpoint {} for replica {}",
                         replicaShard.shardId(),
@@ -483,7 +484,7 @@ public class SegmentReplicationTargetService extends AbstractLifecycleComponent 
     protected boolean processLatestReceivedCheckpoint(IndexShard replicaShard, Thread thread) {
         final ReplicationCheckpoint latestPublishedCheckpoint = replicator.getPrimaryCheckpoint(replicaShard.shardId());
         if (latestPublishedCheckpoint != null) {
-            logger.trace(
+            logger.debug(
                 () -> new ParameterizedMessage(
                     "Processing latest received checkpoint for shard {} {}",
                     replicaShard.shardId(),
@@ -597,7 +598,7 @@ public class SegmentReplicationTargetService extends AbstractLifecycleComponent 
                     @Override
                     public void onReplicationDone(SegmentReplicationState state) {
                         try {
-                            logger.trace(
+                            logger.debug(
                                 () -> new ParameterizedMessage(
                                     "[shardId {}] [replication id {}] Force replication Sync complete to {}, timing data: {}",
                                     shardId,
@@ -653,7 +654,7 @@ public class SegmentReplicationTargetService extends AbstractLifecycleComponent 
         // if the shard is in any state
         if (replicaShard.state().equals(IndexShardState.CLOSED)) {
             // ignore if shard is closed
-            logger.trace(() -> "Ignoring merged segment checkpoint, Shard is closed");
+            logger.debug(() -> "Ignoring merged segment checkpoint, Shard is closed");
             return;
         }
         if (replicaShard.state().equals(IndexShardState.STARTED) == true) {
@@ -725,7 +726,7 @@ public class SegmentReplicationTargetService extends AbstractLifecycleComponent 
                 }
             }
         } else {
-            logger.trace(
+            logger.debug(
                 () -> new ParameterizedMessage(
                     "Ignoring merged segment checkpoint, shard not started {} {}",
                     receivedCheckpoint,
