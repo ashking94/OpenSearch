@@ -188,6 +188,37 @@ public class RecoverySettings {
         Property.NodeScope
     );
 
+    /**
+     * Dynamic setting to enable the merged segment warming(pre-copy) feature, default: false
+     */
+    public static final Setting<Boolean> INDICES_MERGED_SEGMENT_REPLICATION_WARMER_ENABLED_SETTING = Setting.boolSetting(
+        "indices.replication.merged_segment_warmer_enabled",
+        false,
+        Property.Dynamic,
+        Property.NodeScope
+    );
+
+    /**
+     * Individual speed setting for merged segment replication, default -1B to reuse the setting of recovery.
+     */
+    public static final Setting<ByteSizeValue> INDICES_MERGED_SEGMENT_REPLICATION_MAX_BYTES_PER_SEC_SETTING = Setting.byteSizeSetting(
+        "indices.merged_segment_replication.max_bytes_per_sec",
+        new ByteSizeValue(-1),
+        Property.Dynamic,
+        Property.NodeScope
+    );
+
+    /**
+     * Control the maximum waiting time for replicate merged segment to the replica
+     */
+    public static final Setting<TimeValue> INDICES_MERGED_SEGMENT_REPLICATION_TIMEOUT_SETTING = Setting.timeSetting(
+        "indices.merged_segment_replication_timeout",
+        TimeValue.timeValueMinutes(15),
+        TimeValue.timeValueMinutes(0),
+        Property.Dynamic,
+        Property.NodeScope
+    );
+
     private volatile ByteSizeValue recoveryMaxBytesPerSec;
     private volatile ByteSizeValue replicationMaxBytesPerSec;
     private volatile int maxConcurrentFileChunks;
